@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BitLocker Manager</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/startbootstrap-sb-admin-2@4.1.4/css/sb-admin-2.min.css" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+<style>
+  body { background:#f8f9fc; }
+  .brand { color:#fff; background:#007bff; padding:.9rem 1rem; font-weight:700; letter-spacing:.03em; }
+  .app-hidden { display:none !important; }
+  .key-box { font-family:SFMono-Regular,Menlo,Consolas,monospace; font-size:.85rem; letter-spacing:0;
+             background:#fff3cd; border:1px solid #ffe69c; border-radius:.35rem; padding:.6rem .8rem; word-break:break-all; }
+  .mono { font-family:SFMono-Regular,Menlo,Consolas,monospace; }
+  #dev-count { color:#858796; font-size:.85rem; }
+  .spin { color:#007bff; }
+</style>
+</head>
+<body>
+<div class="container-fluid" style="max-width:1100px;">
+  <div class="brand rounded mt-3 d-flex justify-content-between align-items-center">
+    <span><i class="fas fa-lock mr-2"></i>BitLocker Manager</span>
+    <div class="dropdown">
+      <a href="#" id="whoami" class="small font-weight-normal text-white dropdown-toggle" data-toggle="dropdown" style="text-decoration:none;"></a>
+      <div class="dropdown-menu dropdown-menu-right">
+        <h6 class="dropdown-header" id="whoami-header"></h6>
+        <a class="dropdown-item app-super app-hidden" href="#" id="menu-settings"><i class="fas fa-users-cog mr-2"></i>Settings — Users</a>
+        <div class="dropdown-divider"></div>
+        <a class="dropdown-item text-danger" href="#" id="menu-signout"><i class="fas fa-sign-out-alt mr-2"></i>Sign out</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOGIN -->
+  <div id="view-login" class="card shadow mt-4 mx-auto" style="max-width:420px;">
+    <div class="card-body">
+      <h5 class="mb-3">Sign in</h5>
+      <input id="li-user" class="form-control mb-2" placeholder="Username" autocomplete="username">
+      <input id="li-pass" type="password" class="form-control mb-3" placeholder="Password" autocomplete="current-password">
+      <div id="mfa-row" class="app-hidden">
+        <input id="li-code" class="form-control mb-3" placeholder="6-digit MFA code" inputmode="numeric">
+      </div>
+      <button id="li-btn" class="btn btn-primary btn-block">Continue</button>
+      <div id="li-err" class="text-danger small mt-2"></div>
+    </div>
+  </div>
+
+  <!-- APP -->
+  <div id="view-app" class="app-hidden">
+    <ul class="nav nav-tabs mt-4" id="tabs">
+      <li class="nav-item"><a class="nav-link active" data-tab="devices" href="#">Devices</a></li>
+      <li class="nav-item app-audit app-hidden"><a class="nav-link" data-tab="audit" href="#">Audit</a></li>
+      <li class="nav-item ml-auto"><a class="nav-link text-danger" id="logout" href="#">Sign out</a></li>
+    </ul>
+
+    <!-- DEVICES -->
+    <div id="tab-devices" class="card shadow border-top-0">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
+          <h6 class="m-0 font-weight-bold text-primary">Devices</h6>
+          <div>
+            <button id="btn-add" class="btn btn-sm btn-success app-hidden"><i class="fas fa-plus mr-1"></i>Add device</button>
+            <div class="btn-group app-hidden" id="btn-export-group">
+              <button class="btn btn-sm btn-outline-primary dropdown-toggle" data-toggle="dropdown"><i class="fas fa-download mr-1"></i>Export</button>
+              <div class="dropdown-menu dropdown-menu-right">
+                <h6 class="dropdown-header">Inventory (no keys)</h6>
+                <a class="dropdown-item" href="#" onclick="doExport('inventory','csv');return false;">Inventory · CSV</a>
+                <a class="dropdown-item" href="#" onclick="doExport('inventory','xlsx');return false;">Inventory · Excel</a>
+                <div class="dropdown-divider"></div>
+                <h6 class="dropdown-header">Audit report</h6>
+                <a class="dropdown-item" href="#" onclick="doExport('audit','csv');return false;">Audit log · CSV</a>
+                <a class="dropdown-item" href="#" onclick="doExport('audit','xlsx');return false;">Audit log · Excel</a>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="d-flex align-items-center mb-2">
+          <div class="input-group">
+            <div class="input-group-prepend"><span class="input-group-text bg-white"><i class="fas fa-search text-muted"></i></span></div>
+            <input id="dev-search" class="form-control border-left-0" placeholder="Search hostname, serial, or Recovery Key ID…">
+            <div class="input-group-append"><span class="input-group-text bg-white"><i id="dev-spin" class="fas fa-spinner fa-spin spin app-hidden"></i></span></div>
+          </div>
+        </div>
+        <div id="dev-count" class="mb-2"></div>
+        <table class="table table-sm table-hover mb-0">
+          <thead><tr><th>Hostname</th><th>Site</th><th>Recovery Key ID</th><th>Status</th><th></th></tr></thead>
+          <tbody id="dev-rows"></tbody>
+        </table>
+        <div id="dev-empty" class="text-center text-muted py-4 app-hidden">No devices match your search.</div>
+        <div class="d-flex justify-content-between align-items-center mt-2">
+          <div class="d-flex align-items-center">
+            <span class="small text-muted mr-2">Per page</span>
+            <select id="dev-pagesize" class="form-control form-control-sm" style="width:auto;">
+              <option value="25" selected>25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </div>
+          <div class="d-flex align-items-center">
+            <span id="dev-page" class="small text-muted mr-3"></span>
+            <button id="dev-prev" class="btn btn-sm btn-outline-secondary mr-1">&laquo; Prev</button>
+            <button id="dev-next" class="btn btn-sm btn-outline-secondary">Next &raquo;</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AUDIT -->
+    <div id="tab-audit" class="card shadow border-top-0 app-hidden">
+      <div class="card-body">
+        <div id="audit-chain" class="mb-2"></div>
+        <table class="table table-sm"><thead><tr><th>#</th><th>Action</th><th>Sev</th><th>Detail</th></tr></thead>
+          <tbody id="audit-rows"></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS — USERS (super admin only) -->
+  <div id="view-users" class="app-hidden">
+    <div class="d-flex justify-content-between align-items-center mt-4 mb-2">
+      <h5 class="m-0"><i class="fas fa-users-cog mr-2 text-primary"></i>Settings — Users</h5>
+      <button id="users-back" class="btn btn-sm btn-outline-secondary">&laquo; Back to app</button>
+    </div>
+    <div id="super-warning" class="alert alert-warning app-hidden">
+      <i class="fas fa-triangle-exclamation mr-2"></i>You have only one Super Admin account. Create a backup Super Admin so you're not locked out if this one is lost.
+    </div>
+    <div class="card shadow">
+      <div class="card-body">
+        <div class="d-flex justify-content-end mb-2">
+          <button id="btn-add-user" class="btn btn-sm btn-success"><i class="fas fa-user-plus mr-1"></i>Add user</button>
+        </div>
+        <table class="table table-sm table-hover mb-0">
+          <thead><tr><th>Username</th><th>Role</th><th>Scope</th><th>Status</th><th></th></tr></thead>
+          <tbody id="user-rows"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Checkout modal -->
+<div class="modal fade" id="coModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+  <div class="modal-header"><h5 class="modal-title">Unlock — open checkout</h5>
+    <button class="close" data-dismiss="modal">&times;</button></div>
+  <div class="modal-body" id="co-body"></div>
+</div></div></div>
+
+<!-- Reveal modal (break-glass) -->
+<div class="modal fade" id="rvModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+  <div class="modal-header bg-danger text-white">
+    <h5 class="modal-title"><i class="fas fa-triangle-exclamation mr-2"></i>Break-glass reveal</h5>
+    <button class="close text-white" data-dismiss="modal">&times;</button></div>
+  <div class="modal-body">
+    <div class="alert alert-warning small">Reveals the plaintext recovery key for <b id="rv-host"></b>. Logged as high-severity; the key is flagged for rotation. Use only when the USB path fails.</div>
+    <div class="form-group"><label>Reason / ticket</label><input id="rv-reason" class="form-control" placeholder="e.g. USB path failed on this unit"></div>
+    <div class="form-group">
+      <label>Step-up MFA code</label>
+      <input id="rv-code" class="form-control" inputmode="numeric" placeholder="6-digit code">
+      <small class="text-muted">From your authenticator app — changes every 30 seconds.</small>
+    </div>
+    <button id="rv-btn" class="btn btn-danger">Reveal key</button>
+    <div id="rv-out" class="mt-3"></div>
+  </div>
+</div></div></div>
+
+<!-- Add / Edit device modal -->
+<div class="modal fade" id="edModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+  <div class="modal-header"><h5 class="modal-title" id="ed-title">Add device</h5>
+    <button class="close" data-dismiss="modal">&times;</button></div>
+  <div class="modal-body">
+    <div class="form-group"><label>Hostname</label><input id="ed-host" class="form-control"></div>
+    <div class="form-row">
+      <div class="form-group col"><label>Site</label><input id="ed-site" class="form-control"></div>
+      <div class="form-group col"><label>Department</label><input id="ed-dept" class="form-control"></div>
+    </div>
+    <div class="form-group"><label>Serial <span class="text-muted small">(optional)</span></label><input id="ed-serial" class="form-control"></div>
+    <div id="ed-key-block">
+      <hr>
+      <div class="form-group"><label>Recovery Key ID <span class="text-muted small">(optional)</span></label><input id="ed-keyid" class="form-control mono"></div>
+      <div class="form-group"><label>Recovery Key <span class="text-muted small">(optional — stored encrypted)</span></label><input id="ed-key" class="form-control mono" placeholder="123456-…-888888"></div>
+    </div>
+    <button id="ed-save" class="btn btn-primary">Save</button>
+    <div id="ed-err" class="text-danger small mt-2"></div>
+  </div>
+</div></div></div>
+
+<!-- Add user modal -->
+<div class="modal fade" id="userModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+  <div class="modal-header"><h5 class="modal-title" id="user-title">Add user</h5>
+    <button class="close" data-dismiss="modal">&times;</button></div>
+  <div class="modal-body">
+    <div class="form-group"><label>Username</label><input id="u-name" class="form-control"></div>
+    <div class="form-row">
+      <div class="form-group col">
+        <label>Role</label>
+        <select id="u-role" class="form-control">
+          <option value="operator">Operator (runs unlocks, sees no keys)</option>
+          <option value="admin">Admin (add/import devices)</option>
+          <option value="auditor">Auditor (read logs, export)</option>
+          <option value="super_admin">Super Admin (full access)</option>
+        </select>
+      </div>
+      <div class="form-group col"><label>Scope / site <span class="text-muted small">(operators)</span></label><input id="u-scope" class="form-control" placeholder="e.g. Filandia"></div>
+    </div>
+    <div class="form-group" id="u-pass-block"><label>Password</label><input id="u-pass" type="text" class="form-control" placeholder="set an initial password"></div>
+    <button id="u-save" class="btn btn-primary">Create user</button>
+    <div id="u-err" class="text-danger small mt-2"></div>
+  </div>
+</div></div></div>
+
+<!-- MFA enrolment (shown once after create) -->
+<div class="modal fade" id="mfaModal" tabindex="-1" data-backdrop="static"><div class="modal-dialog"><div class="modal-content">
+  <div class="modal-header bg-success text-white"><h5 class="modal-title">User created — set up their MFA</h5></div>
+  <div class="modal-body text-center">
+    <p class="small text-muted">Have <b id="mfa-user"></b> scan this in their authenticator app (Google Authenticator / Authy). It's shown only once.</p>
+    <div id="mfa-qr" class="d-flex justify-content-center my-2"></div>
+    <p class="small">Or enter the key manually:</p>
+    <div class="mono" id="mfa-secret" style="word-break:break-all;"></div>
+    <button class="btn btn-primary mt-3" data-dismiss="modal">Done</button>
+  </div>
+</div></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+const API = "";
+let TOKEN = sessionStorage.getItem("blm_token") || null;
+let mfaToken = null;
+let rvContext = null;      // { id, hostname }
+let rvTimer = null;
+
+function claims() { try { return JSON.parse(atob(TOKEN.split(".")[1])); } catch { return {}; } }
+async function api(path, opts={}) {
+  opts.headers = Object.assign({ "Content-Type": "application/json" }, opts.headers || {});
+  if (TOKEN) opts.headers["Authorization"] = "Bearer " + TOKEN;
+  const r = await fetch(API + path, opts);
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.detail || r.status);
+  return body;
+}
+const show = (id) => document.getElementById(id);
+const esc = (s) => (s==null?"":String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// ---- auth ----
+show("li-btn").onclick = async () => {
+  show("li-err").textContent = "";
+  try {
+    if (!mfaToken) {
+      const r = await api("/auth/login", { method:"POST",
+        body: JSON.stringify({ username: show("li-user").value, password: show("li-pass").value }) });
+      if (r.access_token) { return finishLogin(r.access_token); }
+      mfaToken = r.mfa_token; show("mfa-row").classList.remove("app-hidden");
+      show("li-btn").textContent = "Verify code";
+    } else {
+      const r = await api("/auth/mfa", { method:"POST",
+        body: JSON.stringify({ mfa_token: mfaToken, code: show("li-code").value }) });
+      finishLogin(r.access_token);
+    }
+  } catch (e) { show("li-err").textContent = e.message; mfaToken = null;
+    show("mfa-row").classList.add("app-hidden"); show("li-btn").textContent = "Continue"; }
+};
+function finishLogin(tok) {
+  TOKEN = tok; sessionStorage.setItem("blm_token", tok); mfaToken = null;
+  const c = claims();
+  show("whoami").innerHTML = c.sub ? `${c.role}${c.scope ? " · "+c.scope : ""} <span class="caret"></span>` : "";
+  show("whoami-header").textContent = c.role ? `Signed in — ${c.role}` : "";
+  show("view-login").classList.add("app-hidden");
+  show("view-app").classList.remove("app-hidden");
+  if (["auditor","admin","super_admin"].includes(c.role)) document.querySelectorAll(".app-audit").forEach(e=>e.classList.remove("app-hidden"));
+  if (["admin","super_admin"].includes(c.role)) show("btn-add").classList.remove("app-hidden");
+  if (["auditor","super_admin"].includes(c.role)) show("btn-export-group").classList.remove("app-hidden");
+  if (c.role === "super_admin") document.querySelectorAll(".app-super").forEach(e=>e.classList.remove("app-hidden"));
+  loadDevices("");
+}
+show("menu-signout").onclick = (e) => { e.preventDefault(); sessionStorage.removeItem("blm_token"); location.reload(); };
+show("logout").onclick = () => { sessionStorage.removeItem("blm_token"); location.reload(); };
+
+// ---- settings / users ----
+show("menu-settings").onclick = (e) => { e.preventDefault(); openUsers(); };
+show("users-back").onclick = () => { show("view-users").classList.add("app-hidden"); show("view-app").classList.remove("app-hidden"); };
+function openUsers() {
+  show("view-app").classList.add("app-hidden");
+  show("view-users").classList.remove("app-hidden");
+  loadUsers();
+}
+async function loadUsers() {
+  const users = await api("/operators");
+  const activeSupers = users.filter(u => u.role === "super_admin" && u.status === "active").length;
+  show("super-warning").classList.toggle("app-hidden", activeSupers !== 1);
+  const badge = (s) => s === "active" ? '<span class="badge badge-success">active</span>' : '<span class="badge badge-secondary">inactive</span>';
+  show("user-rows").innerHTML = users.map(u => {
+    const act = u.status === "active"
+      ? `<a class="dropdown-item" href="#" onclick="userAction('${u.id}','deactivate');return false;">Deactivate</a>`
+      : `<a class="dropdown-item" href="#" onclick="userAction('${u.id}','activate');return false;">Activate</a>`;
+    return `<tr>
+      <td class="font-weight-bold">${esc(u.username)}</td>
+      <td>${esc(u.role)}</td>
+      <td>${esc(u.scope) || '<span class="text-muted">—</span>'}</td>
+      <td>${badge(u.status)}</td>
+      <td class="text-right">
+        <div class="dropdown">
+          <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-toggle="dropdown">Actions</button>
+          <div class="dropdown-menu dropdown-menu-right">
+            ${act}
+            <div class="dropdown-divider"></div>
+            <a class="dropdown-item text-danger" href="#" onclick="userAction('${u.id}','delete','${esc(u.username)}');return false;">Delete</a>
+          </div>
+        </div>
+      </td></tr>`;
+  }).join("");
+}
+async function userAction(id, action, username) {
+  if (action === "delete" && !confirm(`Permanently delete ${username}? This cannot be undone (their audit history is kept).`)) return;
+  try {
+    if (action === "delete") await api(`/operators/${id}`, { method:"DELETE" });
+    else await api(`/operators/${id}/${action}`, { method:"POST" });
+    loadUsers();
+  } catch (e) { alert(e.message); }
+}
+show("btn-add-user").onclick = () => {
+  ["u-name","u-scope","u-pass"].forEach(i => show(i).value = "");
+  show("u-role").value = "operator"; show("u-err").textContent = "";
+  $('#userModal').modal('show');
+};
+show("u-save").onclick = async () => {
+  show("u-err").textContent = "";
+  try {
+    const r = await api("/operators", { method:"POST", body: JSON.stringify({
+      username: show("u-name").value, password: show("u-pass").value,
+      role: show("u-role").value, scope: show("u-scope").value || null }) });
+    $('#userModal').modal('hide');
+    // show the MFA QR once
+    show("mfa-user").textContent = r.operator.username;
+    show("mfa-secret").textContent = r.mfa_secret;
+    show("mfa-qr").innerHTML = "";
+    new QRCode(show("mfa-qr"), { text: r.mfa_uri, width: 180, height: 180 });
+    $('#mfaModal').modal('show');
+    loadUsers();
+  } catch (e) { show("u-err").textContent = e.message; }
+};
+
+// ---- tabs ----
+document.querySelectorAll("#tabs a[data-tab]").forEach(a => a.onclick = (ev) => {
+  ev.preventDefault();
+  document.querySelectorAll("#tabs a").forEach(x=>x.classList.remove("active")); a.classList.add("active");
+  ["devices","audit"].forEach(t => show("tab-"+t).classList.toggle("app-hidden", t !== a.dataset.tab));
+  if (a.dataset.tab === "audit") loadAudit();
+});
+
+// ---- devices (server-side search + debounce + paging) ----
+let searchTimer = null;
+let devQuery = "";
+let devPage = 0;
+let devPageSize = 25;
+
+show("dev-search").oninput = (e) => {
+  clearTimeout(searchTimer);
+  show("dev-spin").classList.remove("app-hidden");
+  devQuery = e.target.value;
+  devPage = 0;                                   // new search resets to first page
+  searchTimer = setTimeout(loadDevices, 250);    // debounce
+};
+show("dev-pagesize").onchange = (e) => { devPageSize = parseInt(e.target.value, 10); devPage = 0; loadDevices(); };
+show("dev-prev").onclick = () => { if (devPage > 0) { devPage--; loadDevices(); } };
+show("dev-next").onclick = () => { devPage++; loadDevices(); };
+
+async function loadDevices(resetQuery) {
+  if (resetQuery === "") { devQuery = ""; devPage = 0; }   // called as loadDevices("") on login
+  show("dev-spin").classList.remove("app-hidden");
+  try {
+    const offset = devPage * devPageSize;
+    const rows = await api(`/devices?q=${encodeURIComponent(devQuery)}&limit=${devPageSize}&offset=${offset}`);
+    renderDevices(rows);
+    // pager state (count-free: Next is available only if we got a full page)
+    show("dev-prev").disabled = devPage === 0;
+    show("dev-next").disabled = rows.length < devPageSize;
+    const from = rows.length ? offset + 1 : 0;
+    show("dev-page").textContent = rows.length ? `showing ${from}–${offset + rows.length} · page ${devPage + 1}` : "";
+  } catch (e) {
+    show("dev-rows").innerHTML = `<tr><td colspan="5" class="text-danger small">${esc(e.message)}</td></tr>`;
+  } finally { show("dev-spin").classList.add("app-hidden"); }
+}
+function renderDevices(rows) {
+  const role = claims().role;
+  const isSuper = role === "super_admin";
+  show("dev-count").textContent = rows.length + (rows.length === 1 ? " device on this page" : " devices on this page");
+  show("dev-empty").classList.toggle("app-hidden", rows.length !== 0);
+  show("dev-rows").innerHTML = rows.map(d => {
+    const unlock = d.has_active_key ? `<button class="btn btn-sm btn-primary" onclick="openCheckout('${d.id}','${esc(d.hostname)}')">Unlock…</button>` : "";
+    const reveal = (isSuper && d.has_active_key) ? `<button class="btn btn-sm btn-outline-danger ml-1" onclick="openReveal('${d.id}','${esc(d.hostname)}')" title="Break-glass reveal"><i class="fas fa-key mr-1"></i>Reveal</button>` : "";
+    const edit = isSuper ? `<button class="btn btn-sm btn-outline-secondary ml-1" onclick='openEdit(${JSON.stringify(d)})' title="Edit"><i class="fas fa-pen"></i></button>` : "";
+    const archive = isSuper ? `<button class="btn btn-sm btn-outline-secondary ml-1" onclick="archiveDevice('${d.id}','${esc(d.hostname)}')" title="Archive"><i class="fas fa-box-archive"></i></button>` : "";
+    return `<tr>
+      <td class="font-weight-bold">${esc(d.hostname)}</td>
+      <td>${esc(d.site)}</td>
+      <td class="mono small">${esc(d.recovery_key_id) || '<span class="text-muted">—</span>'}</td>
+      <td>${d.has_active_key ? '<span class="badge badge-success">key on file</span>' : '<span class="badge badge-secondary">no key</span>'}</td>
+      <td class="text-right text-nowrap">${unlock}${reveal}${edit}${archive}</td>
+    </tr>`;
+  }).join("");
+}
+
+// ---- add / edit / archive ----
+let edMode = "add", edId = null;
+show("btn-add").onclick = () => {
+  edMode = "add"; edId = null;
+  show("ed-title").textContent = "Add device";
+  show("ed-key-block").classList.remove("app-hidden");
+  ["ed-host","ed-site","ed-dept","ed-serial","ed-keyid","ed-key"].forEach(i => show(i).value = "");
+  show("ed-err").textContent = "";
+  $('#edModal').modal('show');
+};
+function openEdit(d) {
+  edMode = "edit"; edId = d.id;
+  show("ed-title").textContent = "Edit " + d.hostname;
+  show("ed-key-block").classList.add("app-hidden");   // keys aren't edited here
+  show("ed-host").value = d.hostname || "";
+  show("ed-site").value = d.site || "";
+  show("ed-dept").value = d.department || "";
+  show("ed-serial").value = "";
+  show("ed-err").textContent = "";
+  $('#edModal').modal('show');
+}
+show("ed-save").onclick = async () => {
+  show("ed-err").textContent = "";
+  try {
+    if (edMode === "edit") {
+      await api(`/devices/${edId}`, { method:"PATCH", body: JSON.stringify({
+        hostname: show("ed-host").value, site: show("ed-site").value, department: show("ed-dept").value }) });
+    } else {
+      const dev = await api("/devices", { method:"POST", body: JSON.stringify({
+        hostname: show("ed-host").value, site: show("ed-site").value,
+        department: show("ed-dept").value, serial: show("ed-serial").value,
+        volume_id: show("ed-keyid").value || null }) });
+      const key = show("ed-key").value.trim();
+      if (key) await api(`/devices/${dev.id}/keys`, { method:"POST", body: JSON.stringify({
+        key_material: key, key_identifier: show("ed-keyid").value || null, source: "setup" }) });
+    }
+    $('#edModal').modal('hide');
+    loadDevices();
+  } catch (e) { show("ed-err").textContent = e.message; }
+};
+async function archiveDevice(id, hostname) {
+  if (!confirm(`Archive ${hostname}? It will be hidden from the list, but its record and history are kept.`)) return;
+  try { await api(`/devices/${id}/archive`, { method:"POST" }); loadDevices(); }
+  catch (e) { alert(e.message); }
+}
+
+// ---- export (fetch with auth, then download the blob) ----
+async function doExport(kind, fmt) {
+  let path = `/export/${kind}?fmt=${fmt}`;
+  if (kind === "inventory" && devQuery) path += `&q=${encodeURIComponent(devQuery)}`;
+  try {
+    const r = await fetch(API + path, { headers: { Authorization: "Bearer " + TOKEN } });
+    if (!r.ok) { const b = await r.json().catch(()=>({})); throw new Error(b.detail || r.status); }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `${kind === "audit" ? "audit-report" : "inventory"}.${fmt}`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  } catch (e) { alert("Export failed: " + e.message); }
+}
+
+// ---- unlock: open checkout silently, then ping the local Unlock Helper to load the Pico ----
+const HELPER = "http://127.0.0.1:8765";
+async function openCheckout(deviceId, hostname) {
+  const ticket = prompt(`Ticket / reason for unlocking ${hostname}?`, "");
+  if (ticket === null) return;
+  show("co-body").innerHTML = `<p><i class="fas fa-spinner fa-spin mr-2"></i>Loading the recovery key onto the Pico for <b>${esc(hostname)}</b>…</p>`;
+  $('#coModal').modal('show');
+  try {
+    // 1) open a checkout — the token stays here in JS, never shown to the operator
+    const co = await api("/checkouts", { method:"POST", body: JSON.stringify({ device_id: deviceId, ticket_ref: ticket }) });
+    // 2) hand it to the local helper, which fetches the key and writes the Pico
+    let res;
+    try {
+      const r = await fetch(HELPER + "/load", { method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ api: window.location.origin, checkout_id: co.checkout_id, provisioning_token: co.provisioning_token }) });
+      res = await r.json();
+      if (!r.ok || !res.ok) throw new Error(res.error || "helper error");
+    } catch (err) {
+      if (String(err).includes("Failed to fetch")) throw new Error("HELPER_DOWN");
+      throw err;
+    }
+    show("co-body").innerHTML = `<div class="alert alert-success mb-0">
+      <i class="fas fa-check-circle mr-1"></i>Key loaded onto the Pico (<b>${esc(res.drive)}</b>).
+      Plug the Pico into the locked machine — it will type the key and unlock it.</div>`;
+  } catch (e) {
+    const msg = e.message === "HELPER_DOWN"
+      ? "Couldn't reach the Unlock Helper. Start it on the operator's PC (run <code>python agent\\unlock-helper.py</code>) and try again."
+      : esc(e.message);
+    show("co-body").innerHTML = `<div class="alert alert-danger mb-0">${msg}</div>`;
+  }
+}
+
+// ---- reveal (opened per-device from the searchable list) ----
+function openReveal(deviceId, hostname) {
+  rvContext = { id: deviceId, hostname };
+  show("rv-host").textContent = hostname;
+  show("rv-reason").value = ""; show("rv-code").value = ""; show("rv-out").innerHTML = "";
+  clearInterval(rvTimer);
+  $('#rvModal').modal('show');
+}
+show("rv-btn").onclick = async () => {
+  show("rv-out").innerHTML = "";
+  try {
+    const r = await api(`/devices/${rvContext.id}/reveal`, { method:"POST",
+      body: JSON.stringify({ code: show("rv-code").value, reason: show("rv-reason").value }) });
+    showRevealedKey(r.key_material, r.warning);
+    show("rv-code").value = "";
+  } catch (e) { show("rv-out").innerHTML = `<div class="text-danger small">${esc(e.message)}</div>`; }
+};
+function showRevealedKey(key, warning) {
+  let secs = 30;
+  const render = () => {
+    show("rv-out").innerHTML = `
+      <div class="key-box" id="rv-key">${esc(key)}</div>
+      <div class="d-flex justify-content-between align-items-center mt-2">
+        <button class="btn btn-sm btn-outline-secondary" id="rv-copy"><i class="far fa-copy mr-1"></i>Copy</button>
+        <span class="small text-muted">Auto-hides in <b id="rv-cd">${secs}</b>s</span>
+        <button class="btn btn-sm btn-outline-dark" id="rv-hide">Hide now</button>
+      </div>
+      <div class="text-warning small mt-2">${esc(warning)}</div>`;
+    show("rv-copy").onclick = () => { navigator.clipboard.writeText(key).then(()=>{ show("rv-copy").innerHTML='<i class="fas fa-check mr-1"></i>Copied'; }); };
+    show("rv-hide").onclick = hideKey;
+  };
+  const hideKey = () => { clearInterval(rvTimer); show("rv-out").innerHTML = '<div class="text-muted small">Key hidden.</div>'; };
+  render();
+  clearInterval(rvTimer);
+  rvTimer = setInterval(() => {
+    secs -= 1;
+    const cd = show("rv-cd");
+    if (cd) cd.textContent = secs;
+    if (secs <= 0) hideKey();
+  }, 1000);
+}
+$('#rvModal').on('hidden.bs.modal', () => { clearInterval(rvTimer); show("rv-out").innerHTML = ""; });
+
+// ---- audit ----
+async function loadAudit() {
+  const r = await api("/audit");
+  show("audit-chain").innerHTML = r.chain_valid
+    ? '<span class="badge badge-success">chain intact</span>'
+    : '<span class="badge badge-danger">CHAIN BROKEN — tampering detected</span>';
+  show("audit-rows").innerHTML = r.entries.slice().reverse().map(e => `
+    <tr class="${e.severity==='high'?'table-warning':''}">
+      <td>${e.seq}</td><td>${esc(e.action)}</td><td>${esc(e.severity)}</td><td class="small">${esc(e.detail)||''}</td>
+    </tr>`).join("");
+}
+
+if (TOKEN) finishLogin(TOKEN);
+</script>
+</body>
+</html>
