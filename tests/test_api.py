@@ -181,9 +181,58 @@ def test_export_roles_and_no_keys(app_client):
     assert app_client.get("/export/inventory", headers=auth(admin)).status_code == 403
     r = app_client.get("/export/inventory?fmt=csv", headers=auth(aud))
     assert "text/csv" in r.headers["content-type"]
-    assert "DSE-FIL-042" in r.text and RECOVERY_KEY not in r.text  # inventory never carries the key
+    assert "DSE-FIL-042" in r.text and RECOVERY_KEY not in r.text
     r = app_client.get("/export/audit?fmt=xlsx", headers=auth(boss))
     assert "spreadsheetml" in r.headers["content-type"]
+
+
+# ---- Import: parsers + commit ----
+
+def test_import_recovery_txt_parser():
+    from app.importers import parse_recovery_txt
+    body = ("BitLocker Drive Encryption recovery key\n\nIdentifier:\n\n"
+            "\t0BCA25A7-DDF3-4E97-87F1-A643EB656942\n\nRecovery Key:\n\n"
+            "\t335357-052701-573265-124388-247709-400708-532015-331848\n")
+    fname = "BitLocker_Recovery_Key_0BCA25A7-DDF3-4E97-87F1-A643EB656942_1DR5GX3_MAT-LTP-016.TXT"
+    r = parse_recovery_txt(body, filename=fname)
+    assert r["key_identifier"] == "0BCA25A7-DDF3-4E97-87F1-A643EB656942"
+    assert r["key_material"].startswith("335357-052701") and r["key_material"].count("-") == 7
+    assert r["hostname"] == "MAT-LTP-016"
+    assert r["site"] == "MAT"
+    assert r["serial"] == "1DR5GX3"
+
+
+def test_import_csv_parser_matches_columns():
+    from app.importers import parse_csv
+    csv_text = (
+        "Hostname,Site,Identifier,Recovery Key,Serial\n"
+        "MAT-LTP-016,MAT,0BCA25A7-DDF3-4E97-87F1-A643EB656942,335357-052701-573265-124388-247709-400708-532015-331848,1DR5GX3\n"
+        "MAT-LTP-017,MAT,F70F2436-E285-40B3-AB51-B50CBF6EC24C,123456-654321-111111-222222-333333-444444-555555-666666,2ABCDEF\n"
+        "BADROW,MAT,not-a-guid,not-a-key,\n"
+    )
+    rows, mapping, warnings = parse_csv(csv_text)
+    assert len(rows) == 2
+    assert rows[0]["hostname"] == "MAT-LTP-016"
+    assert mapping["key_identifier"] == "Identifier"
+    assert any("BADROW" in w for w in warnings)
+
+
+def test_import_commit_admin_only_and_idempotent(app_client):
+    admin = token_for(app_client, "admin", "pw-admin")
+    cris = token_for(app_client, "cris", "pw-cris")
+    payload = [
+        {"hostname": "MAT-LTP-100", "site": "MAT", "serial": "SN100",
+         "key_identifier": "0BCA25A7-DDF3-4E97-87F1-A643EB656942",
+         "key_material": "335357-052701-573265-124388-247709-400708-532015-331848"},
+        {"hostname": "FIL-LTP-101", "site": "Filandia", "serial": "SN101",
+         "key_identifier": "F70F2436-E285-40B3-AB51-B50CBF6EC24C",
+         "key_material": "123456-654321-111111-222222-333333-444444-555555-666666"},
+    ]
+    assert app_client.post("/import/commit", headers=auth(cris), json=payload).status_code == 403
+    r = app_client.post("/import/commit", headers=auth(admin), json=payload)
+    assert r.status_code == 200 and r.json()["created"] == 2 and r.json()["skipped"] == 0
+    r2 = app_client.post("/import/commit", headers=auth(admin), json=payload)
+    assert r2.json()["created"] == 0 and r2.json()["skipped"] == 2
 
 
 # ---- SR3 + SR4: checkout lifecycle gate ----

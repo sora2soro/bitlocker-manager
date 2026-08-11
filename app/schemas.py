@@ -23,6 +23,19 @@ class TokenResp(BaseModel):
     token_type: str = "bearer"
 
 
+# ---- sites (pick-list) ----
+class SiteCreate(BaseModel):
+    name: str
+    code: str | None = None
+
+
+class SiteOut(BaseModel):
+    id: str
+    name: str
+    code: str | None
+    is_active: bool
+
+
 # ---- devices ----
 class DeviceCreate(BaseModel):
     hostname: str
@@ -51,9 +64,43 @@ class DeviceOut(BaseModel):
     hostname: str
     site: str
     department: str | None
+    serial: str | None
     encryption_status: str
     recovery_key_id: str | None    # the on-screen lookup handle — NOT the key
     has_active_key: bool
+
+
+class ImportRow(BaseModel):
+    hostname: str
+    site: str
+    key_identifier: str
+    key_material: str
+    serial: str | None = None
+
+
+class ImportResp(BaseModel):
+    created: int
+    skipped: int
+    errors: list[str]
+
+
+# ---- data quality (sanitation) ----
+class IncompleteDeviceOut(BaseModel):
+    id: str
+    hostname: str
+    site: str
+    serial: str | None
+    recovery_key_id: str | None
+    missing: list[str]              # which fields are blank: 'hostname' | 'serial' | 'recovery_key_id'
+
+
+class DataQualityResp(BaseModel):
+    total: int                     # non-archived devices scanned
+    incomplete: int                # how many have at least one gap
+    missing_serial: int
+    missing_hostname: int
+    missing_recovery_key_id: int
+    devices: list[IncompleteDeviceOut]
 
 
 # ---- checkouts ----
@@ -113,11 +160,19 @@ class OperatorCreate(BaseModel):
     password: str
     role: str                      # operator | admin | auditor | super_admin
     scope: str | None = None       # required for role=operator
+    first_name: str | None = None
+    last_name: str | None = None
+    middle_initial: str | None = None
+    job_title: str | None = None
 
 
 class OperatorUpdate(BaseModel):
     role: str | None = None
     scope: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    middle_initial: str | None = None
+    job_title: str | None = None
 
 
 class OperatorOut(BaseModel):
@@ -126,6 +181,11 @@ class OperatorOut(BaseModel):
     role: str
     scope: str | None
     status: str
+    first_name: str | None = None
+    last_name: str | None = None
+    middle_initial: str | None = None
+    job_title: str | None = None
+    display_name: str | None = None   # "Last, First M." convenience for the UI
 
 
 class OperatorCreateResp(BaseModel):

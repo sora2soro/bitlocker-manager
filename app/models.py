@@ -20,6 +20,23 @@ class Base(DeclarativeBase):
     pass
 
 
+class Site(Base):
+    """A physical site/campaign that populates the Site/Scope dropdowns.
+
+    Device.site and Operator.scope store the site *name* (not a FK) so existing
+    rows and the whole codebase keep working unchanged; this table is the
+    authoritative source for the pick-lists and lets Admins add new sites.
+    """
+    __tablename__ = "sites"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    name: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    code: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_by: Mapped[str | None] = mapped_column(ForeignKey("operators.id"), nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=_now)
+
+
 class Device(Base):
     __tablename__ = "devices"
 
@@ -45,6 +62,11 @@ class Operator(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     username: Mapped[str] = mapped_column(String(128), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
+    # profile (FR: identify the human behind the account)
+    first_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    last_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    middle_initial: Mapped[str | None] = mapped_column(String(4), nullable=True)
+    job_title: Mapped[str | None] = mapped_column(String(128), nullable=True)
     # operator | admin | auditor | super_admin
     role: Mapped[str] = mapped_column(String(32))
     scope: Mapped[str | None] = mapped_column(String(64), nullable=True)  # site scope; null = all

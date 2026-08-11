@@ -62,6 +62,8 @@
           <h6 class="m-0 font-weight-bold text-primary">Devices</h6>
           <div>
             <button id="btn-add" class="btn btn-sm btn-success app-hidden"><i class="fas fa-plus mr-1"></i>Add device</button>
+            <button id="btn-import" class="btn btn-sm btn-info app-hidden"><i class="fas fa-file-import mr-1"></i>Import</button>
+            <button id="btn-dq" class="btn btn-sm btn-outline-warning app-audit app-hidden"><i class="fas fa-broom mr-1"></i>Data quality</button>
             <div class="btn-group app-hidden" id="btn-export-group">
               <button class="btn btn-sm btn-outline-primary dropdown-toggle" data-toggle="dropdown"><i class="fas fa-download mr-1"></i>Export</button>
               <div class="dropdown-menu dropdown-menu-right">
@@ -85,7 +87,7 @@
         </div>
         <div id="dev-count" class="mb-2"></div>
         <table class="table table-sm table-hover mb-0">
-          <thead><tr><th>Hostname</th><th>Site</th><th>Recovery Key ID</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th>Hostname</th><th>Serial</th><th>Site</th><th>Recovery Key ID</th><th>Status</th><th></th></tr></thead>
           <tbody id="dev-rows"></tbody>
         </table>
         <div id="dev-empty" class="text-center text-muted py-4 app-hidden">No devices match your search.</div>
@@ -165,6 +167,35 @@
   </div>
 </div></div></div>
 
+<!-- Import wizard modal -->
+<div class="modal fade" id="importModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content">
+  <div class="modal-header"><h5 class="modal-title"><i class="fas fa-file-import mr-2"></i>Import devices</h5>
+    <button class="close" data-dismiss="modal">&times;</button></div>
+  <div class="modal-body">
+    <div class="alert alert-info small">Bulk-add devices with their recovery keys. Two ways:
+      <b>drop BitLocker <code>.txt</code> files</b> (Windows-generated), or <b>upload a CSV</b> exported from your Google Sheet.
+      <br>Note: after a successful import, please delete the source files/sheet — a plaintext copy defeats the vault.
+    </div>
+    <ul class="nav nav-tabs mb-3" id="imp-tabs">
+      <li class="nav-item"><a class="nav-link active" data-imp="txt" href="#"><i class="fas fa-file-lines mr-1"></i>BitLocker .txt files</a></li>
+      <li class="nav-item"><a class="nav-link" data-imp="csv" href="#"><i class="fas fa-file-csv mr-1"></i>CSV spreadsheet</a></li>
+    </ul>
+    <div id="imp-tab-txt">
+      <input type="file" id="imp-txt-files" class="form-control-file" accept=".txt" multiple>
+      <small class="text-muted">Select one or many <code>BitLocker_Recovery_Key_*.txt</code> files. Hostname, Site, and Serial are auto-extracted from the filename.</small>
+    </div>
+    <div id="imp-tab-csv" class="app-hidden">
+      <input type="file" id="imp-csv-file" class="form-control-file" accept=".csv">
+      <small class="text-muted">Recognised columns: <b>Hostname · Site · Identifier · Recovery Key</b> (plus optional Serial). Other columns are ignored.</small>
+    </div>
+    <div id="imp-preview" class="mt-3"></div>
+    <div id="imp-errors" class="mt-2 small text-danger"></div>
+    <div class="d-flex justify-content-end mt-3">
+      <button id="imp-commit" class="btn btn-primary" disabled><i class="fas fa-check mr-1"></i>Import <span id="imp-count"></span></button>
+    </div>
+  </div>
+</div></div></div>
+
 <!-- Add / Edit device modal -->
 <div class="modal fade" id="edModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
   <div class="modal-header"><h5 class="modal-title" id="ed-title">Add device</h5>
@@ -172,14 +203,21 @@
   <div class="modal-body">
     <div class="form-group"><label>Hostname</label><input id="ed-host" class="form-control"></div>
     <div class="form-row">
-      <div class="form-group col"><label>Site</label><input id="ed-site" class="form-control"></div>
+      <div class="form-group col"><label>Site</label>
+        <div class="input-group">
+          <select id="ed-site" class="form-control"></select>
+          <div class="input-group-append app-admin-site">
+            <button class="btn btn-outline-secondary" type="button" id="ed-add-site" title="Add a new site"><i class="fas fa-plus"></i></button>
+          </div>
+        </div>
+      </div>
       <div class="form-group col"><label>Department</label><input id="ed-dept" class="form-control"></div>
     </div>
     <div class="form-group"><label>Serial <span class="text-muted small">(optional)</span></label><input id="ed-serial" class="form-control"></div>
     <div id="ed-key-block">
       <hr>
-      <div class="form-group"><label>Recovery Key ID <span class="text-muted small">(optional)</span></label><input id="ed-keyid" class="form-control mono"></div>
-      <div class="form-group"><label>Recovery Key <span class="text-muted small">(optional — stored encrypted)</span></label><input id="ed-key" class="form-control mono" placeholder="123456-…-888888"></div>
+      <div class="form-group"><label>Recovery Key ID (Identifier) <span class="text-danger">*</span></label><input id="ed-keyid" class="form-control mono" placeholder="e.g. F70F2436-E285-40B3-AB51-B50CBF6EC24C"></div>
+      <div class="form-group"><label>Recovery Key <span class="text-danger">*</span></label><input id="ed-key" class="form-control mono" placeholder="123456-654321-…-888888 (48 digits)"></div>
     </div>
     <button id="ed-save" class="btn btn-primary">Save</button>
     <div id="ed-err" class="text-danger small mt-2"></div>
@@ -191,7 +229,15 @@
   <div class="modal-header"><h5 class="modal-title" id="user-title">Add user</h5>
     <button class="close" data-dismiss="modal">&times;</button></div>
   <div class="modal-body">
-    <div class="form-group"><label>Username</label><input id="u-name" class="form-control"></div>
+    <div class="form-row">
+      <div class="form-group col-5"><label>First name</label><input id="u-first" class="form-control"></div>
+      <div class="form-group col-5"><label>Last name</label><input id="u-last" class="form-control"></div>
+      <div class="form-group col-2"><label>M.I.</label><input id="u-mi" class="form-control text-center" maxlength="1" placeholder="M"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group col"><label>Job title</label><input id="u-title" class="form-control" placeholder="e.g. Desktop Support Engineer"></div>
+      <div class="form-group col"><label>Username</label><input id="u-name" class="form-control" autocomplete="off"></div>
+    </div>
     <div class="form-row">
       <div class="form-group col">
         <label>Role</label>
@@ -199,12 +245,22 @@
           <option value="operator">Operator (runs unlocks, sees no keys)</option>
           <option value="admin">Admin (add/import devices)</option>
           <option value="auditor">Auditor (read logs, export)</option>
-          <option value="super_admin">Super Admin (full access)</option>
         </select>
+        <small class="text-muted">Super Admin can only be created via the seed CLI (deliberate — protects the highest privilege).</small>
       </div>
-      <div class="form-group col"><label>Scope / site <span class="text-muted small">(operators)</span></label><input id="u-scope" class="form-control" placeholder="e.g. Filandia"></div>
+      <div class="form-group col"><label>Scope / site <span class="text-muted small">(operators)</span></label>
+        <select id="u-scope" class="form-control"></select>
+      </div>
     </div>
-    <div class="form-group" id="u-pass-block"><label>Password</label><input id="u-pass" type="text" class="form-control" placeholder="set an initial password"></div>
+    <div class="form-group" id="u-pass-block"><label>Initial password</label>
+      <div class="input-group">
+        <input id="u-pass" type="password" class="form-control" placeholder="set an initial password" autocomplete="new-password">
+        <div class="input-group-append">
+          <button class="btn btn-outline-secondary" type="button" id="u-pass-toggle" title="Show / hide"><i class="fas fa-eye"></i></button>
+        </div>
+      </div>
+      <small class="text-muted">Stored only as an Argon2 hash — never in plaintext. The user sets their own password after first login.</small>
+    </div>
     <button id="u-save" class="btn btn-primary">Create user</button>
     <div id="u-err" class="text-danger small mt-2"></div>
   </div>
@@ -219,6 +275,22 @@
     <p class="small">Or enter the key manually:</p>
     <div class="mono" id="mfa-secret" style="word-break:break-all;"></div>
     <button class="btn btn-primary mt-3" data-dismiss="modal">Done</button>
+  </div>
+</div></div></div>
+
+<!-- Data quality (sanitation) -->
+<div class="modal fade" id="dqModal" tabindex="-1"><div class="modal-dialog modal-lg"><div class="modal-content">
+  <div class="modal-header"><h5 class="modal-title"><i class="fas fa-broom mr-2"></i>Data quality — incomplete records</h5>
+    <button class="close" data-dismiss="modal">&times;</button></div>
+  <div class="modal-body">
+    <div id="dq-summary" class="mb-2 small text-muted"></div>
+    <div class="table-responsive" style="max-height:55vh;overflow:auto;">
+      <table class="table table-sm table-hover mb-0">
+        <thead class="thead-light"><tr><th>Hostname</th><th>Site</th><th>Serial</th><th>Recovery Key ID</th><th>Missing</th><th></th></tr></thead>
+        <tbody id="dq-rows"></tbody>
+      </table>
+    </div>
+    <div id="dq-empty" class="text-center text-success py-4 app-hidden"><i class="fas fa-check-circle mr-1"></i>No gaps — every record has a hostname, serial, and Recovery Key ID.</div>
   </div>
 </div></div></div>
 
@@ -243,6 +315,27 @@ async function api(path, opts={}) {
 }
 const show = (id) => document.getElementById(id);
 const esc = (s) => (s==null?"":String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// ---- sites (shared pick-list for Site + Scope dropdowns) ----
+let SITES = [];
+async function loadSites() {
+  try { SITES = await api("/sites"); } catch { SITES = []; }
+  return SITES;
+}
+/** Fill a <select> with sites. `selected` keeps a current value; `blankLabel`
+ *  (e.g. for operator scope) adds an empty first option. */
+function fillSiteSelect(selectId, selected, blankLabel) {
+  const el = show(selectId);
+  if (!el) return;
+  const opts = [];
+  if (blankLabel !== undefined) opts.push(`<option value="">${esc(blankLabel)}</option>`);
+  const names = SITES.map(s => s.name);
+  // if the record's current site isn't in the active list (e.g. legacy value), keep it visible
+  if (selected && !names.includes(selected)) opts.push(`<option value="${esc(selected)}">${esc(selected)} (inactive)</option>`);
+  for (const s of SITES) opts.push(`<option value="${esc(s.name)}">${esc(s.name)}</option>`);
+  el.innerHTML = opts.join("");
+  if (selected) el.value = selected;
+}
 
 // ---- auth ----
 show("li-btn").onclick = async () => {
@@ -270,9 +363,12 @@ function finishLogin(tok) {
   show("view-login").classList.add("app-hidden");
   show("view-app").classList.remove("app-hidden");
   if (["auditor","admin","super_admin"].includes(c.role)) document.querySelectorAll(".app-audit").forEach(e=>e.classList.remove("app-hidden"));
-  if (["admin","super_admin"].includes(c.role)) show("btn-add").classList.remove("app-hidden");
+  if (["admin","super_admin"].includes(c.role)) { show("btn-add").classList.remove("app-hidden"); show("btn-import").classList.remove("app-hidden"); }
   if (["auditor","super_admin"].includes(c.role)) show("btn-export-group").classList.remove("app-hidden");
   if (c.role === "super_admin") document.querySelectorAll(".app-super").forEach(e=>e.classList.remove("app-hidden"));
+  if (["admin","super_admin"].includes(c.role)) document.querySelectorAll(".app-admin-site").forEach(e=>e.classList.remove("app-hidden"));
+  else document.querySelectorAll(".app-admin-site").forEach(e=>e.classList.add("app-hidden"));
+  loadSites();
   loadDevices("");
 }
 show("menu-signout").onclick = (e) => { e.preventDefault(); sessionStorage.removeItem("blm_token"); location.reload(); };
@@ -296,7 +392,7 @@ async function loadUsers() {
       ? `<a class="dropdown-item" href="#" onclick="userAction('${u.id}','deactivate');return false;">Deactivate</a>`
       : `<a class="dropdown-item" href="#" onclick="userAction('${u.id}','activate');return false;">Activate</a>`;
     return `<tr>
-      <td class="font-weight-bold">${esc(u.username)}</td>
+      <td class="font-weight-bold">${esc(u.display_name || u.username)}</td>
       <td>${esc(u.role)}</td>
       <td>${esc(u.scope) || '<span class="text-muted">—</span>'}</td>
       <td>${badge(u.status)}</td>
@@ -312,8 +408,8 @@ async function loadUsers() {
       </td></tr>`;
   }).join("");
 }
-async function userAction(id, action, username) {
-  if (action === "delete" && !confirm(`Permanently delete ${username}? This cannot be undone (their audit history is kept).`)) return;
+async function userAction(id, action, displayName) {
+  if (action === "delete" && !confirm(`Permanently delete ${displayName}? This cannot be undone (their audit history is kept).`)) return;
   try {
     if (action === "delete") await api(`/operators/${id}`, { method:"DELETE" });
     else await api(`/operators/${id}/${action}`, { method:"POST" });
@@ -321,7 +417,8 @@ async function userAction(id, action, username) {
   } catch (e) { alert(e.message); }
 }
 show("btn-add-user").onclick = () => {
-  ["u-name","u-scope","u-pass"].forEach(i => show(i).value = "");
+  ["u-first","u-last","u-mi","u-title","u-name","u-scope","u-pass"].forEach(i => show(i).value = "");
+  fillSiteSelect("u-scope", null, "— all sites —");
   show("u-role").value = "operator"; show("u-err").textContent = "";
   $('#userModal').modal('show');
 };
@@ -330,7 +427,12 @@ show("u-save").onclick = async () => {
   try {
     const r = await api("/operators", { method:"POST", body: JSON.stringify({
       username: show("u-name").value, password: show("u-pass").value,
-      role: show("u-role").value, scope: show("u-scope").value || null }) });
+      role: show("u-role").value, scope: show("u-scope").value || null,
+      first_name: (show("u-first").value || "").trim() || null,
+      last_name: (show("u-last").value || "").trim() || null,
+      middle_initial: (show("u-mi").value || "").trim() || null,
+      job_title: (show("u-title").value || "").trim() || null
+    }) });
     $('#userModal').modal('hide');
     // show the MFA QR once
     show("mfa-user").textContent = r.operator.username;
@@ -340,6 +442,13 @@ show("u-save").onclick = async () => {
     $('#mfaModal').modal('show');
     loadUsers();
   } catch (e) { show("u-err").textContent = e.message; }
+};
+
+show("u-pass-toggle").onclick = () => {
+  const field = show("u-pass");
+  const on = field.type === "password";
+  field.type = on ? "text" : "password";
+  show("u-pass-toggle").innerHTML = `<i class="fas fa-eye${on?"-slash":""}"></i>`;
 };
 
 // ---- tabs ----
@@ -366,6 +475,24 @@ show("dev-search").oninput = (e) => {
 show("dev-pagesize").onchange = (e) => { devPageSize = parseInt(e.target.value, 10); devPage = 0; loadDevices(); };
 show("dev-prev").onclick = () => { if (devPage > 0) { devPage--; loadDevices(); } };
 show("dev-next").onclick = () => { devPage++; loadDevices(); };
+show("btn-dq").onclick = () => loadDataQuality();
+
+async function loadDataQuality() {
+  const r = await api("/devices-quality/incomplete");
+  const missing = (d) => d.missing.map(f => ({ hostname:'device', serial:'serial #', recovery_key_id:'Recovery Key ID' }[f])).join(", ");
+  const noSerial = r.devices.filter(d => d.missing.includes("serial")).length;
+  const noHost = r.devices.filter(d => d.missing.includes("hostname")).length;
+  const noKeyId = r.devices.filter(d => d.missing.includes("recovery_key_id")).length;
+  show("dq-summary").textContent = `Found ${r.incomplete} incomplete records out of ${r.total} devices`;
+  show("dq-rows").innerHTML = r.devices.map(d => `
+    <tr>
+      <td>${esc(d.hostname)}</td><td>${esc(d.site)}</td><td>${esc(d.serial)||'—'}</td><td>${esc(d.recovery_key_id)||'—'}</td>
+      <td><span class="text-danger">${missing(d)}</span></td>
+      <td><button class="btn btn-sm btn-outline-primary" onclick='openEdit(${JSON.stringify(d)})'>Edit</button></td>
+    </tr>`).join("");
+  show("dq-empty").classList.toggle("app-hidden", r.incomplete !== 0);
+  $('#dqModal').modal('show');
+}
 
 async function loadDevices(resetQuery) {
   if (resetQuery === "") { devQuery = ""; devPage = 0; }   // called as loadDevices("") on login
@@ -380,7 +507,7 @@ async function loadDevices(resetQuery) {
     const from = rows.length ? offset + 1 : 0;
     show("dev-page").textContent = rows.length ? `showing ${from}–${offset + rows.length} · page ${devPage + 1}` : "";
   } catch (e) {
-    show("dev-rows").innerHTML = `<tr><td colspan="5" class="text-danger small">${esc(e.message)}</td></tr>`;
+    show("dev-rows").innerHTML = `<tr><td colspan="6" class="text-danger small">${esc(e.message)}</td></tr>`;
   } finally { show("dev-spin").classList.add("app-hidden"); }
 }
 function renderDevices(rows) {
@@ -395,6 +522,7 @@ function renderDevices(rows) {
     const archive = isSuper ? `<button class="btn btn-sm btn-outline-secondary ml-1" onclick="archiveDevice('${d.id}','${esc(d.hostname)}')" title="Archive"><i class="fas fa-box-archive"></i></button>` : "";
     return `<tr>
       <td class="font-weight-bold">${esc(d.hostname)}</td>
+      <td class="mono small">${esc(d.serial) || '<span class="text-muted">—</span>'}</td>
       <td>${esc(d.site)}</td>
       <td class="mono small">${esc(d.recovery_key_id) || '<span class="text-muted">—</span>'}</td>
       <td>${d.has_active_key ? '<span class="badge badge-success">key on file</span>' : '<span class="badge badge-secondary">no key</span>'}</td>
@@ -409,7 +537,8 @@ show("btn-add").onclick = () => {
   edMode = "add"; edId = null;
   show("ed-title").textContent = "Add device";
   show("ed-key-block").classList.remove("app-hidden");
-  ["ed-host","ed-site","ed-dept","ed-serial","ed-keyid","ed-key"].forEach(i => show(i).value = "");
+  ["ed-host","ed-dept","ed-serial","ed-keyid","ed-key"].forEach(i => show(i).value = "");
+  fillSiteSelect("ed-site", null);
   show("ed-err").textContent = "";
   $('#edModal').modal('show');
 };
@@ -418,7 +547,7 @@ function openEdit(d) {
   show("ed-title").textContent = "Edit " + d.hostname;
   show("ed-key-block").classList.add("app-hidden");   // keys aren't edited here
   show("ed-host").value = d.hostname || "";
-  show("ed-site").value = d.site || "";
+  fillSiteSelect("ed-site", d.site || null);
   show("ed-dept").value = d.department || "";
   show("ed-serial").value = "";
   show("ed-err").textContent = "";
@@ -431,13 +560,16 @@ show("ed-save").onclick = async () => {
       await api(`/devices/${edId}`, { method:"PATCH", body: JSON.stringify({
         hostname: show("ed-host").value, site: show("ed-site").value, department: show("ed-dept").value }) });
     } else {
+      const host = show("ed-host").value.trim(), site = show("ed-site").value.trim();
+      const kid = show("ed-keyid").value.trim(), key = show("ed-key").value.trim();
+      if (!host || !site) { show("ed-err").textContent = "Hostname and Site are required."; return; }
+      if (!kid || !key)   { show("ed-err").textContent = "Recovery Key ID and Recovery Key are required."; return; }
+      if (!/^\d{6}(-\d{6}){7}$/.test(key)) { show("ed-err").textContent = "Recovery Key must be 8 groups of 6 digits separated by dashes."; return; }
       const dev = await api("/devices", { method:"POST", body: JSON.stringify({
-        hostname: show("ed-host").value, site: show("ed-site").value,
-        department: show("ed-dept").value, serial: show("ed-serial").value,
-        volume_id: show("ed-keyid").value || null }) });
-      const key = show("ed-key").value.trim();
-      if (key) await api(`/devices/${dev.id}/keys`, { method:"POST", body: JSON.stringify({
-        key_material: key, key_identifier: show("ed-keyid").value || null, source: "setup" }) });
+        hostname: host, site, department: show("ed-dept").value,
+        serial: show("ed-serial").value, volume_id: kid }) });
+      await api(`/devices/${dev.id}/keys`, { method:"POST", body: JSON.stringify({
+        key_material: key, key_identifier: kid, source: "setup" }) });
     }
     $('#edModal').modal('hide');
     loadDevices();
@@ -448,6 +580,87 @@ async function archiveDevice(id, hostname) {
   try { await api(`/devices/${id}/archive`, { method:"POST" }); loadDevices(); }
   catch (e) { alert(e.message); }
 }
+
+// ---- import wizard ----
+let impRows = [];
+show("btn-import").onclick = () => {
+  impRows = []; show("imp-preview").innerHTML = ""; show("imp-errors").textContent = "";
+  show("imp-commit").disabled = true; show("imp-count").textContent = "";
+  document.querySelectorAll("#imp-tabs a").forEach(a => a.classList.toggle("active", a.dataset.imp === "txt"));
+  show("imp-tab-txt").classList.remove("app-hidden");
+  show("imp-tab-csv").classList.add("app-hidden");
+  show("imp-txt-files").value = ""; show("imp-csv-file").value = "";
+  $('#importModal').modal('show');
+};
+document.querySelectorAll("#imp-tabs a").forEach(a => a.onclick = (ev) => {
+  ev.preventDefault();
+  document.querySelectorAll("#imp-tabs a").forEach(x => x.classList.remove("active"));
+  a.classList.add("active");
+  show("imp-tab-txt").classList.toggle("app-hidden", a.dataset.imp !== "txt");
+  show("imp-tab-csv").classList.toggle("app-hidden", a.dataset.imp !== "csv");
+  impRows = []; show("imp-preview").innerHTML = ""; show("imp-errors").textContent = "";
+  show("imp-commit").disabled = true; show("imp-count").textContent = "";
+});
+async function apiUpload(path, formData) {
+  const r = await fetch(path, { method: "POST", headers: { Authorization: "Bearer " + TOKEN }, body: formData });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.detail || r.status);
+  return body;
+}
+show("imp-txt-files").onchange = async (e) => {
+  const files = [...e.target.files]; if (!files.length) return;
+  const fd = new FormData(); files.forEach(f => fd.append("files", f));
+  try {
+    const r = await apiUpload("/import/parse-txt", fd);
+    impRows = r.parsed.filter(p => p.hostname && p.site && p.key_identifier && p.key_material).map(p => ({
+      hostname: p.hostname, site: p.site, serial: p.serial || null,
+      key_identifier: p.key_identifier, key_material: p.key_material,
+    }));
+    renderImpPreview(impRows, r.errors, `${files.length} file(s)`);
+  } catch (err) { show("imp-errors").textContent = err.message; }
+};
+show("imp-csv-file").onchange = async (e) => {
+  if (!e.target.files.length) return;
+  const fd = new FormData(); fd.append("file", e.target.files[0]);
+  try {
+    const r = await apiUpload("/import/parse-csv", fd);
+    impRows = r.rows;
+    const mapNote = Object.entries(r.mapping || {}).map(([k,v]) => `${k} ← <b>${esc(v)}</b>`).join(" · ");
+    renderImpPreview(impRows, r.warnings, `CSV columns matched: ${mapNote}`);
+  } catch (err) { show("imp-errors").textContent = err.message; }
+};
+function renderImpPreview(rows, warnings, note) {
+  if (!rows.length) {
+    show("imp-preview").innerHTML = `<div class="text-muted small">No usable rows found.</div>`;
+    show("imp-commit").disabled = true; show("imp-count").textContent = "";
+  } else {
+    const first = rows.slice(0, 10);
+    const more = rows.length > 10 ? `<div class="small text-muted mt-1">…and ${rows.length - 10} more</div>` : "";
+    show("imp-preview").innerHTML = `<div class="small text-muted mb-1">${note}</div>
+      <table class="table table-sm table-bordered mb-0"><thead><tr>
+        <th>Hostname</th><th>Site</th><th>Serial</th><th>Identifier</th><th>Recovery Key</th></tr></thead>
+      <tbody>${first.map(r => `<tr>
+        <td class="font-weight-bold">${esc(r.hostname)}</td><td>${esc(r.site)}</td>
+        <td class="mono small">${esc(r.serial)||''}</td>
+        <td class="mono small">${esc(r.key_identifier)}</td>
+        <td class="mono small text-muted">${esc(r.key_material.slice(0,7))}…<em>hidden</em></td>
+      </tr>`).join("")}</tbody></table>${more}`;
+    show("imp-commit").disabled = false;
+    show("imp-count").textContent = `(${rows.length})`;
+  }
+  show("imp-errors").innerHTML = (warnings || []).map(w => esc(w)).join("<br>");
+}
+show("imp-commit").onclick = async () => {
+  show("imp-commit").disabled = true;
+  try {
+    const r = await api("/import/commit", { method:"POST", body: JSON.stringify(impRows) });
+    show("imp-preview").innerHTML = `<div class="alert alert-success">
+      <b>Import complete.</b> Created ${r.created}, skipped ${r.skipped} (already existed)${r.errors.length ? `, ${r.errors.length} errors` : ''}.
+    </div>`;
+    show("imp-errors").innerHTML = r.errors.map(e => esc(e)).join("<br>");
+    loadDevices();
+  } catch (e) { show("imp-errors").textContent = e.message; show("imp-commit").disabled = false; }
+};
 
 // ---- export (fetch with auth, then download the blob) ----
 async function doExport(kind, fmt) {
