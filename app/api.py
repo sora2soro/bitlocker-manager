@@ -21,11 +21,12 @@ import io
 
 import jwt
 import pyotp
-from fastapi import Depends, FastAPI, HTTPException, Query, Response, status
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Response, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, or_, select
 
 from . import vault
+from . import importers
 from .audit import append_audit, verify_chain
 from .config import settings as default_settings
 from .crypto import SoftwareKekProvider
@@ -38,15 +39,19 @@ from .deps import (
     require_role,
     visible_sites,
 )
-from .models import AuditLog, Base, Checkout, Device, KeyVersion, Operator, _now
+from .models import AuditLog, Base, Checkout, Device, KeyVersion, Operator, Site, _now
 from .schemas import (
     AuditOut,
     AuditResp,
     CheckoutOpen,
     CheckoutOpenResp,
+    DataQualityResp,
     DeviceCreate,
     DeviceOut,
     DeviceUpdate,
+    IncompleteDeviceOut,
+    ImportResp,
+    ImportRow,
     KeyEnroll,
     LoginReq,
     MfaReq,
@@ -59,6 +64,8 @@ from .schemas import (
     RevealReq,
     RevealResp,
     RotateReq,
+    SiteCreate,
+    SiteOut,
     TokenResp,
 )
 from .security import create_token, decode_token, hash_password, verify_password, verify_totp
@@ -68,6 +75,7 @@ def _device_out(session, d: Device) -> DeviceOut:
     active = vault.active_key(session, d)
     return DeviceOut(
         id=d.id, hostname=d.hostname, site=d.site, department=d.department,
+        serial=d.serial,
         encryption_status=d.encryption_status,
         recovery_key_id=(active.key_identifier if active else None),
         has_active_key=active is not None,
@@ -79,8 +87,9 @@ def create_app(*, engine=None, kek=None, settings=None) -> FastAPI:
     if engine is None:
         engine = make_engine(settings.db_url)
         Base.metadata.create_all(engine)
-    from .db import run_light_migrations
+    from .db import run_light_migrations, seed_default_sites
     run_light_migrations(engine)
+    seed_default_sites(engine)   # works on every dialect (Postgres included)
     if kek is None:
         kek = SoftwareKekProvider(settings.kek_passphrase, settings.kek_salt)
 
@@ -136,6 +145,55 @@ def create_app(*, engine=None, kek=None, settings=None) -> FastAPI:
                               ttl_seconds=settings.access_ttl_seconds)
         append_audit(session, action="login", operator_id=op.id)
         return TokenResp(access_token=access)
+
+    # ---------------- sites (pick-list for Site / Scope dropdowns) ----------------
+    @app.get("/sites", response_model=list[SiteOut])
+    def list_sites(include_inactive: bool = False, session=Depends(get_session),
+                   _: Operator = Depends(get_current_operator)):
+        stmt = select(Site)
+        if not include_inactive:
+            stmt = stmt.where(Site.is_active.is_(True))
+        stmt = stmt.order_by(Site.name)
+        return [SiteOut(id=s.id, name=s.name, code=s.code, is_active=s.is_active)
+                for s in session.execute(stmt).scalars().all()]
+
+    @app.post("/sites", response_model=SiteOut, status_code=201)
+    def create_site(body: SiteCreate, session=Depends(get_session),
+                    operator: Operator = Depends(require_role("admin", "super_admin"))):
+        name = (body.name or "").strip()
+        if not name:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "site name required")
+        existing = session.execute(select(Site).where(func.lower(Site.name) == name.lower())).scalar_one_or_none()
+        if existing:
+            # idempotent: reactivate a soft-deleted site instead of erroring
+            if not existing.is_active:
+                existing.is_active = True
+                append_audit(session, action="site_reactivated", operator_id=operator.id, detail=f"site={name}")
+                return SiteOut(id=existing.id, name=existing.name, code=existing.code, is_active=True)
+            raise HTTPException(status.HTTP_409_CONFLICT, "site already exists")
+        s = Site(name=name, code=(body.code or None), created_by=operator.id)
+        session.add(s)
+        session.flush()
+        append_audit(session, action="site_created", operator_id=operator.id, detail=f"site={name}")
+        return SiteOut(id=s.id, name=s.name, code=s.code, is_active=s.is_active)
+
+    @app.post("/sites/{site_id}/deactivate", response_model=SiteOut)
+    def deactivate_site(site_id: str, session=Depends(get_session),
+                        operator: Operator = Depends(require_role("admin", "super_admin"))):
+        s = session.get(Site, site_id)
+        if s is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "site not found")
+        # never orphan history: block deactivation while devices still reference it
+        in_use = session.execute(
+            select(func.count()).select_from(Device)
+            .where(Device.site == s.name, Device.archived.is_(False))
+        ).scalar_one()
+        if in_use:
+            raise HTTPException(status.HTTP_409_CONFLICT,
+                                f"{in_use} active device(s) still use this site")
+        s.is_active = False
+        append_audit(session, action="site_deactivated", operator_id=operator.id, detail=f"site={s.name}")
+        return SiteOut(id=s.id, name=s.name, code=s.code, is_active=s.is_active)
 
     # ---------------- devices ----------------
     @app.get("/devices", response_model=list[DeviceOut])
@@ -323,12 +381,59 @@ def create_app(*, engine=None, kek=None, settings=None) -> FastAPI:
                      for e in entries],
         )
 
+    # ---------------- data quality (sanitation) ----------------
+    @app.get("/devices-quality/incomplete", response_model=DataQualityResp)
+    def data_quality(session=Depends(get_session),
+                     operator: Operator = Depends(require_role("auditor", "admin", "super_admin"))):
+        """Surface records missing a serial, hostname, or Recovery Key ID so they
+        can be cleaned up. Read-only; helps keep the inventory sane over time."""
+        stmt = select(Device).where(Device.archived.is_(False))
+        sites = visible_sites(operator)
+        if sites is not None:
+            stmt = stmt.where(Device.site.in_(sites))
+        stmt = stmt.order_by(Device.hostname)
+
+        total = 0
+        rows: list[IncompleteDeviceOut] = []
+        miss_serial = miss_host = miss_keyid = 0
+        for d in session.execute(stmt).scalars().all():
+            total += 1
+            active = vault.active_key(session, d)
+            key_id = active.key_identifier if active else None
+            missing: list[str] = []
+            if not (d.hostname or "").strip():
+                missing.append("hostname"); miss_host += 1
+            if not (d.serial or "").strip():
+                missing.append("serial"); miss_serial += 1
+            if not (key_id or "").strip():
+                missing.append("recovery_key_id"); miss_keyid += 1
+            if missing:
+                rows.append(IncompleteDeviceOut(
+                    id=d.id, hostname=d.hostname, site=d.site, serial=d.serial,
+                    recovery_key_id=key_id, missing=missing))
+        return DataQualityResp(
+            total=total, incomplete=len(rows),
+            missing_serial=miss_serial, missing_hostname=miss_host,
+            missing_recovery_key_id=miss_keyid, devices=rows)
+
     # ---------------- user management (super admin only) ----------------
     _ROLES = {"operator", "admin", "auditor", "super_admin"}
 
+    def _display_name(op: Operator) -> str | None:
+        if not (op.first_name or op.last_name):
+            return None
+        first = (op.first_name or "").strip()
+        last = (op.last_name or "").strip()
+        mi = (op.middle_initial or "").strip()
+        mi = f" {mi}." if mi else ""
+        return f"{last}, {first}{mi}".strip(", ").strip() or None
+
     def _op_out(op: Operator) -> OperatorOut:
         return OperatorOut(id=op.id, username=op.username, role=op.role,
-                           scope=op.scope, status=op.status)
+                           scope=op.scope, status=op.status,
+                           first_name=op.first_name, last_name=op.last_name,
+                           middle_initial=op.middle_initial, job_title=op.job_title,
+                           display_name=_display_name(op))
 
     def _active_supers(session) -> int:
         return session.execute(
@@ -354,9 +459,14 @@ def create_app(*, engine=None, kek=None, settings=None) -> FastAPI:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "operators require a scope (site)")
         if session.execute(select(Operator).where(Operator.username == body.username)).scalar_one_or_none():
             raise HTTPException(status.HTTP_409_CONFLICT, "username already exists")
+        mi = (body.middle_initial or "").strip()
+        if len(mi) > 2:                                    # "J" or "J." — one letter
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "middle initial must be a single letter")
         secret = pyotp.random_base32()
         op = Operator(username=body.username, password_hash=hash_password(body.password),
-                      role=body.role, scope=body.scope, mfa_secret=secret, status="active")
+                      role=body.role, scope=body.scope, mfa_secret=secret, status="active",
+                      first_name=(body.first_name or None), last_name=(body.last_name or None),
+                      middle_initial=(mi.rstrip(".") or None), job_title=(body.job_title or None))
         session.add(op)
         session.flush()
         append_audit(session, action="user_created", operator_id=actor.id,
@@ -379,6 +489,15 @@ def create_app(*, engine=None, kek=None, settings=None) -> FastAPI:
             op.role = body.role
         if body.scope is not None:
             op.scope = body.scope
+        for field in ("first_name", "last_name", "job_title"):
+            val = getattr(body, field)
+            if val is not None:
+                setattr(op, field, val.strip() or None)
+        if body.middle_initial is not None:
+            mi = body.middle_initial.strip().rstrip(".")
+            if len(mi) > 1:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "middle initial must be a single letter")
+            op.middle_initial = mi or None
         append_audit(session, action="user_updated", operator_id=actor.id,
                      detail=f"user={op.username} role={op.role}")
         return _op_out(op)
@@ -417,6 +536,78 @@ def create_app(*, engine=None, kek=None, settings=None) -> FastAPI:
         session.delete(op)
         append_audit(session, action="user_deleted", operator_id=actor.id, detail=f"user={username}")
         return {"deleted": True, "username": username}
+
+    # ---------------- import (CSV + BitLocker .txt files) ----------------
+    import os as _os
+    _recovery_dir = _os.path.join(_os.path.dirname(__file__), "..", "data", "recovery-files")
+    _os.makedirs(_recovery_dir, exist_ok=True)
+
+    @app.post("/import/parse-txt")
+    async def import_parse_txt(files: list[UploadFile] = File(...),
+                               operator: Operator = Depends(require_role("admin", "super_admin"))):
+        """Parse one or more BitLocker recovery .txt files, return preview rows.
+        Also saves the original files to data/recovery-files/ (PENDING SUPERVISOR CONSULT).
+        Windows saves these files as UTF-16 by default, so we try that if UTF-8 fails.
+        """
+        parsed, errors = [], []
+        for f in files:
+            raw = await f.read()
+            text = None
+            for enc in ("utf-8-sig", "utf-16", "utf-16-le", "utf-16-be", "latin-1"):
+                try:
+                    text = raw.decode(enc)
+                    # strip stray NULs some encodings leave behind
+                    text = text.replace("\x00", "")
+                    break
+                except (UnicodeDecodeError, UnicodeError):
+                    continue
+            if text is None:
+                errors.append(f"{f.filename}: could not decode file text"); continue
+            try:
+                data = importers.parse_recovery_txt(text, filename=f.filename or "")
+                data["_filename"] = f.filename
+                parsed.append(data)
+                safe_name = (f.filename or "recovery.txt").replace("/", "_").replace("\\", "_")
+                with open(_os.path.join(_recovery_dir, safe_name), "wb") as out:
+                    out.write(raw)                    # keep the original bytes verbatim
+            except Exception as e:
+                errors.append(f"{f.filename}: {e}")
+        return {"parsed": parsed, "errors": errors}
+
+    @app.post("/import/parse-csv")
+    async def import_parse_csv(file: UploadFile = File(...),
+                               operator: Operator = Depends(require_role("admin", "super_admin"))):
+        raw = (await file.read()).decode("utf-8-sig", errors="replace")
+        try:
+            rows, mapping, warnings = importers.parse_csv(raw)
+        except ValueError as e:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
+        return {"rows": rows, "mapping": mapping, "warnings": warnings}
+
+    @app.post("/import/commit", response_model=ImportResp)
+    def import_commit(rows: list[ImportRow], session=Depends(get_session),
+                      operator: Operator = Depends(require_role("admin", "super_admin")),
+                      kek=Depends(get_kek)):
+        created, skipped, errors = 0, 0, []
+        for r in rows:
+            # skip duplicates by hostname (idempotent re-runs, safe)
+            existing = session.execute(select(Device).where(Device.hostname == r.hostname)).scalar_one_or_none()
+            if existing:
+                skipped += 1
+                continue
+            d = Device(hostname=r.hostname, site=r.site, serial=r.serial,
+                       volume_id=r.key_identifier, encryption_status="encrypted")
+            session.add(d); session.flush()
+            try:
+                vault.enroll_key(session, device=d, key_material=r.key_material,
+                                 operator=operator, kek=kek,
+                                 key_identifier=r.key_identifier, source="backfill")
+                created += 1
+            except Exception as e:
+                errors.append(f"{r.hostname}: {e}")
+        append_audit(session, action="import_committed", operator_id=operator.id,
+                     detail=f"created={created} skipped={skipped} errors={len(errors)}")
+        return ImportResp(created=created, skipped=skipped, errors=errors)
 
     # ---------------- exports (audit reports / inventory — never keys) ----------------
     def _spreadsheet(filename: str, header: list[str], rows: list[list], fmt: str) -> Response:

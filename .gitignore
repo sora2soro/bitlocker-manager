@@ -1,0 +1,38 @@
+# BitLocker Manager — .gitignore
+# --------------------------------
+# NEVER commit these to a public or private repo.
+
+# Database — contains encrypted keys and operator accounts
+*.db
+*.sqlite
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Secrets / environment
+.env
+*.env
+secrets.txt
+
+# Pico key file — should never leave the device
+blm_secret.txt
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.swp
