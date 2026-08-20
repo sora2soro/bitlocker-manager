@@ -40,6 +40,7 @@ from .deps import (
     visible_sites,
 )
 from .models import AuditLog, Base, Checkout, Device, KeyVersion, Operator, Site, _now
+from .validators import normalize_recovery_key, normalize_recovery_key_id
 from .schemas import (
     AuditOut,
     AuditResp,
@@ -255,7 +256,32 @@ def create_app(*, engine=None, kek=None, settings=None) -> FastAPI:
     @app.post("/devices", response_model=DeviceOut, status_code=201)
     def create_device(body: DeviceCreate, session=Depends(get_session),
                       operator: Operator = Depends(require_role("admin", "super_admin"))):
-        d = Device(hostname=body.hostname, site=body.site, serial=body.serial,
+        # A serial can legitimately recur (an asset gets reformatted and moved to
+        # another site with a new hostname/key). We keep history: if the serial is
+        # already held by an ACTIVE device, the admin can choose to archive the old
+        # record and replace it — a soft delete, never a hard delete.
+        serial = (body.serial or "").strip()
+        if serial:
+            dupes = session.execute(
+                select(Device).where(Device.serial == serial, Device.archived.is_(False))
+            ).scalars().all()
+            if dupes and not body.replace_existing:
+                raise HTTPException(status.HTTP_409_CONFLICT, detail={
+                    "error": "duplicate_serial",
+                    "message": f"{len(dupes)} active device(s) already use serial {serial}.",
+                    "existing": [{"id": d.id, "hostname": d.hostname, "site": d.site}
+                                 for d in dupes],
+                })
+            if dupes and body.replace_existing:
+                for d in dupes:
+                    d.archived = True
+                    d.archived_at = _now()
+                    d.archived_by = operator.id
+                    append_audit(session, action="device_superseded", operator_id=operator.id,
+                                 device_id=d.id,
+                                 detail=f"replaced by new record for serial {serial}")
+
+        d = Device(hostname=body.hostname, site=body.site, serial=(serial or None),
                    volume_id=body.volume_id, department=body.department,
                    encryption_status="encrypted")
         session.add(d)
@@ -446,15 +472,23 @@ def create_app(*, engine=None, kek=None, settings=None) -> FastAPI:
 
     @app.get("/operators", response_model=list[OperatorOut])
     def list_operators(session=Depends(get_session),
-                       _: Operator = Depends(require_role("super_admin"))):
+                       _: Operator = Depends(require_role("admin", "super_admin"))):
         ops = session.execute(select(Operator).order_by(Operator.username)).scalars().all()
         return [_op_out(o) for o in ops]
 
     @app.post("/operators", response_model=OperatorCreateResp, status_code=201)
     def create_operator(body: OperatorCreate, session=Depends(get_session),
-                        actor: Operator = Depends(require_role("super_admin"))):
+                        actor: Operator = Depends(require_role("admin", "super_admin"))):
         if body.role not in _ROLES:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, f"role must be one of {sorted(_ROLES)}")
+        # Super Admin is never created through the API — only the seed CLI.
+        if body.role == "super_admin":
+            raise HTTPException(status.HTTP_403_FORBIDDEN,
+                                "Super Admin can only be created via the seed CLI")
+        # Admins may create operators and auditors, but not other admins.
+        if actor.role == "admin" and body.role not in ("operator", "auditor"):
+            raise HTTPException(status.HTTP_403_FORBIDDEN,
+                                "Admins can only create operators and auditors")
         if body.role == "operator" and not body.scope:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "operators require a scope (site)")
         if session.execute(select(Operator).where(Operator.username == body.username)).scalar_one_or_none():
@@ -595,13 +629,21 @@ def create_app(*, engine=None, kek=None, settings=None) -> FastAPI:
             if existing:
                 skipped += 1
                 continue
+            # validate the key formats before enrolling; bad rows are reported, not committed
+            try:
+                key_material = normalize_recovery_key(r.key_material)
+                key_id = (normalize_recovery_key_id(r.key_identifier)
+                          if r.key_identifier else None)
+            except ValueError as e:
+                errors.append(f"{r.hostname}: {e}")
+                continue
             d = Device(hostname=r.hostname, site=r.site, serial=r.serial,
-                       volume_id=r.key_identifier, encryption_status="encrypted")
+                       volume_id=key_id, encryption_status="encrypted")
             session.add(d); session.flush()
             try:
-                vault.enroll_key(session, device=d, key_material=r.key_material,
+                vault.enroll_key(session, device=d, key_material=key_material,
                                  operator=operator, kek=kek,
-                                 key_identifier=r.key_identifier, source="backfill")
+                                 key_identifier=key_id, source="backfill")
                 created += 1
             except Exception as e:
                 errors.append(f"{r.hostname}: {e}")

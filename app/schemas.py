@@ -3,7 +3,32 @@ the explicit provisioning/reveal responses.
 """
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+from .validators import (
+    is_valid_recovery_key,
+    is_valid_recovery_key_id,
+    normalize_recovery_key,
+    normalize_recovery_key_id,
+)
+
+
+def _norm_key_id_or_error(v):
+    if v is None or str(v).strip() == "":
+        return None
+    try:
+        return normalize_recovery_key_id(str(v))
+    except ValueError as e:
+        raise ValueError(str(e))
+
+
+def _norm_key_or_error(v):
+    if v is None or str(v).strip() == "":
+        return None
+    try:
+        return normalize_recovery_key(str(v))
+    except ValueError as e:
+        raise ValueError(str(e))
 
 
 # ---- auth ----
@@ -43,6 +68,13 @@ class DeviceCreate(BaseModel):
     serial: str | None = None
     volume_id: str | None = None
     department: str | None = None
+    # when True, archive any active device(s) with the same serial and replace them
+    replace_existing: bool = False
+
+    @field_validator("volume_id")
+    @classmethod
+    def _v_volume_id(cls, v):
+        return _norm_key_id_or_error(v)
 
 
 class DeviceUpdate(BaseModel):
@@ -57,6 +89,18 @@ class KeyEnroll(BaseModel):
     key_identifier: str | None = None
     key_type: str = "recovery"
     source: str = "setup"          # setup | backfill
+
+    @field_validator("key_material")
+    @classmethod
+    def _v_key_material(cls, v):
+        if is_valid_recovery_key(v):
+            return v
+        return normalize_recovery_key(v)   # raises with a clear message if wrong
+
+    @field_validator("key_identifier")
+    @classmethod
+    def _v_key_identifier(cls, v):
+        return _norm_key_id_or_error(v)
 
 
 class DeviceOut(BaseModel):
@@ -126,6 +170,18 @@ class ProvisionResp(BaseModel):
 class RotateReq(BaseModel):
     new_key_material: str
     new_key_identifier: str | None = None
+
+    @field_validator("new_key_material")
+    @classmethod
+    def _v_new_key(cls, v):
+        if is_valid_recovery_key(v):
+            return v
+        return normalize_recovery_key(v)
+
+    @field_validator("new_key_identifier")
+    @classmethod
+    def _v_new_key_id(cls, v):
+        return _norm_key_id_or_error(v)
 
 
 # ---- reveal ----

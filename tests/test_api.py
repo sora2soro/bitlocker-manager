@@ -37,7 +37,9 @@ def app_client():
     s.commit()
     s.close()
     app = create_app(engine=engine, kek=kek, settings=settings)
-    return TestClient(app)
+    client = TestClient(app)
+    client.engine = engine        # exposed so tests can seed rows the API won't create (e.g. a 2nd super)
+    return client
 
 
 def token_for(client, username, password):
@@ -237,28 +239,99 @@ def test_import_commit_admin_only_and_idempotent(app_client):
 
 # ---- SR3 + SR4: checkout lifecycle gate ----
 
-def test_user_management_super_only(app_client):
-    boss = token_for(app_client, "boss", "pw-boss")
+def test_duplicate_serial_archive_and_replace(app_client):
     admin = token_for(app_client, "admin", "pw-admin")
-    # non-super cannot list or create users
-    assert app_client.get("/operators", headers=auth(admin)).status_code == 403
+    KID = "0BCA25A7-DDF3-4E97-87F1-A643EB656942"
+    r = app_client.post("/devices", headers=auth(admin),
+                        json={"hostname": "OLD-HOST", "site": "Filandia",
+                              "serial": "SN-DUP", "volume_id": KID})
+    assert r.status_code == 201
+
+    # same serial without replace -> 409 with conflict details
+    r = app_client.post("/devices", headers=auth(admin),
+                        json={"hostname": "NEW-HOST", "site": "Matina", "serial": "SN-DUP"})
+    assert r.status_code == 409
+    detail = r.json()["detail"]
+    assert detail["error"] == "duplicate_serial"
+    assert detail["existing"][0]["hostname"] == "OLD-HOST"
+
+    # retry with replace_existing -> old archived, new created; only new is active
+    r = app_client.post("/devices", headers=auth(admin),
+                        json={"hostname": "NEW-HOST", "site": "Matina",
+                              "serial": "SN-DUP", "replace_existing": True})
+    assert r.status_code == 201
+    hits = app_client.get("/devices?q=SN-DUP", headers=auth(admin)).json()
+    assert len(hits) == 1 and hits[0]["hostname"] == "NEW-HOST"
+
+
+def test_recovery_key_format_validation(app_client):
+    admin = token_for(app_client, "admin", "pw-admin")
+    # bad Recovery Key ID (not a GUID) rejected on create
+    assert app_client.post("/devices", headers=auth(admin),
+                           json={"hostname": "H1", "site": "Filandia",
+                                 "volume_id": "NOT-A-GUID"}).status_code == 422
+    # valid create, then enroll a key with loose-but-valid inputs -> normalised on the way out
+    r = app_client.post("/devices", headers=auth(admin),
+                        json={"hostname": "H2", "site": "Filandia"})
+    dev_id = r.json()["id"]
+    r = app_client.post(f"/devices/{dev_id}/keys", headers=auth(admin),
+                        json={"key_material": "335357 052701 573265 124388 247709 400708 532015 331848",
+                              "key_identifier": "0bca25a7 ddf3 4e97 87f1 a643eb656942"})
+    assert r.status_code == 201
+    assert r.json()["recovery_key_id"] == "0BCA25A7-DDF3-4E97-87F1-A643EB656942"
+    # bad key material (not 48 digits) rejected on enroll
+    assert app_client.post(f"/devices/{dev_id}/keys", headers=auth(admin),
+                           json={"key_material": "123-456"}).status_code == 422
+
+
+def test_user_management_roles(app_client):
+    boss = token_for(app_client, "boss", "pw-boss")     # super_admin
+    admin = token_for(app_client, "admin", "pw-admin")  # admin
+    aud = token_for(app_client, "auditor", "pw-aud")    # auditor
+
+    # admins and supers can list users; auditors/operators cannot
+    assert app_client.get("/operators", headers=auth(admin)).status_code == 200
     assert app_client.get("/operators", headers=auth(boss)).status_code == 200
-    # create a new auditor
+    assert app_client.get("/operators", headers=auth(aud)).status_code == 403
+
+    # super creates an auditor
     r = app_client.post("/operators", headers=auth(boss),
                         json={"username": "newaud", "password": "pw", "role": "auditor"})
     assert r.status_code == 201
     assert r.json()["mfa_secret"] and r.json()["mfa_uri"].startswith("otpauth://")
-    # duplicate username rejected
+
+    # admin CAN create operators and auditors...
+    assert app_client.post("/operators", headers=auth(admin),
+                           json={"username": "op-by-admin", "password": "pw",
+                                 "role": "operator", "scope": "Filandia"}).status_code == 201
+    assert app_client.post("/operators", headers=auth(admin),
+                           json={"username": "aud-by-admin", "password": "pw",
+                                 "role": "auditor"}).status_code == 201
+    # ...but NOT other admins or supers
+    assert app_client.post("/operators", headers=auth(admin),
+                           json={"username": "admin2", "password": "pw",
+                                 "role": "admin"}).status_code == 403
+    assert app_client.post("/operators", headers=auth(admin),
+                           json={"username": "super2", "password": "pw",
+                                 "role": "super_admin"}).status_code == 403
+
+    # super can create an admin, but super_admin is CLI-only even for super
+    assert app_client.post("/operators", headers=auth(boss),
+                           json={"username": "admin-by-boss", "password": "pw",
+                                 "role": "admin"}).status_code == 201
+    assert app_client.post("/operators", headers=auth(boss),
+                           json={"username": "super-by-boss", "password": "pw",
+                                 "role": "super_admin"}).status_code == 403
+
+    # duplicate username rejected; operator role requires a scope
     assert app_client.post("/operators", headers=auth(boss),
                           json={"username": "newaud", "password": "pw", "role": "auditor"}).status_code == 409
-    # operator role requires a scope
     assert app_client.post("/operators", headers=auth(boss),
                           json={"username": "noScope", "password": "pw", "role": "operator"}).status_code == 400
 
 
 def test_last_super_admin_guardrail(app_client):
     boss = token_for(app_client, "boss", "pw-boss")   # the only super admin in the seed
-    # find boss's own id
     ops = app_client.get("/operators", headers=auth(boss)).json()
     boss_id = next(o["id"] for o in ops if o["username"] == "boss")
     # cannot deactivate, delete, or demote the last active super admin
@@ -266,9 +339,14 @@ def test_last_super_admin_guardrail(app_client):
     assert app_client.delete(f"/operators/{boss_id}", headers=auth(boss)).status_code == 409
     assert app_client.patch(f"/operators/{boss_id}", headers=auth(boss),
                             json={"role": "admin"}).status_code == 409
-    # add a second super admin — now the guard relaxes
-    app_client.post("/operators", headers=auth(boss),
-                    json={"username": "boss2", "password": "pw", "role": "super_admin"})
+    # add a second super admin directly (the API won't create supers) — now the guard relaxes
+    from app.db import session_factory
+    from app.models import Operator
+    from app.security import hash_password
+    s = session_factory(app_client.engine)()
+    s.add(Operator(username="boss2", password_hash=hash_password("pw"),
+                   role="super_admin", status="active", mfa_secret=MFA_SECRET))
+    s.commit(); s.close()
     assert app_client.post(f"/operators/{boss_id}/deactivate", headers=auth(boss)).status_code == 200
 
 

@@ -14,6 +14,12 @@
   .key-box { font-family:SFMono-Regular,Menlo,Consolas,monospace; font-size:.85rem; letter-spacing:0;
              background:#fff3cd; border:1px solid #ffe69c; border-radius:.35rem; padding:.6rem .8rem; word-break:break-all; }
   .mono { font-family:SFMono-Regular,Menlo,Consolas,monospace; }
+  .seg-row { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+  .seg-row .seg { text-align:center; text-transform:uppercase; font-family:SFMono-Regular,Menlo,Consolas,monospace;
+    padding:6px 4px; border:1px solid #ccc; border-radius:4px; min-width:0; }
+  .seg-row .seg:focus { border-color:#4e73df; box-shadow:0 0 0 2px rgba(78,115,223,.15); outline:none; }
+  .seg-row .seg.invalid { border-color:#e74a3b; background:#fff5f5; }
+  .seg-row .seg-sep { color:#aaa; font-weight:bold; }
   #dev-count { color:#858796; font-size:.85rem; }
   .spin { color:#007bff; }
 </style>
@@ -216,8 +222,18 @@
     <div class="form-group"><label>Serial <span class="text-muted small">(optional)</span></label><input id="ed-serial" class="form-control"></div>
     <div id="ed-key-block">
       <hr>
-      <div class="form-group"><label>Recovery Key ID (Identifier) <span class="text-danger">*</span></label><input id="ed-keyid" class="form-control mono" placeholder="e.g. F70F2436-E285-40B3-AB51-B50CBF6EC24C"></div>
-      <div class="form-group"><label>Recovery Key <span class="text-danger">*</span></label><input id="ed-key" class="form-control mono" placeholder="123456-654321-…-888888 (48 digits)"></div>
+      <div class="form-group">
+        <label>Recovery Key ID (Identifier) <span class="text-danger">*</span></label>
+        <div id="ed-keyid-seg" class="seg-row" data-target="ed-keyid"></div>
+        <input type="hidden" id="ed-keyid">
+        <small class="text-muted">8-4-4-4-12 hex, e.g. 0BCA25A7-DDF3-4E97-87F1-A643EB656942. Paste the whole thing into the first box — it spreads across automatically.</small>
+      </div>
+      <div class="form-group">
+        <label>Recovery Key <span class="text-danger">*</span></label>
+        <div id="ed-key-seg" class="seg-row" data-target="ed-key"></div>
+        <input type="hidden" id="ed-key">
+        <small class="text-muted">8 groups of 6 digits (48 total). Paste to auto-fill; extra digits are rejected.</small>
+      </div>
     </div>
     <button id="ed-save" class="btn btn-primary">Save</button>
     <div id="ed-err" class="text-danger small mt-2"></div>
@@ -310,13 +326,90 @@ async function api(path, opts={}) {
   if (TOKEN) opts.headers["Authorization"] = "Bearer " + TOKEN;
   const r = await fetch(API + path, opts);
   const body = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(body.detail || r.status);
+  if (!r.ok) {
+    const d = body.detail;
+    const msg = (d && typeof d === "object") ? (d.message || "Request failed")
+              : (d || ("Error " + r.status));
+    const err = new Error(msg);
+    err.detail = d; err.status = r.status;
+    throw err;
+  }
   return body;
 }
 const show = (id) => document.getElementById(id);
 const esc = (s) => (s==null?"":String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 // ---- sites (shared pick-list for Site + Scope dropdowns) ----
+/** Build a segmented input: one box per group, auto-advance, paste-distribute,
+ *  backspace-to-previous, char filtering. Writes the joined dashed value into the
+ *  hidden input named by the container's data-target.
+ *
+ *  groups  – array of segment lengths, e.g. [8,4,4,4,12] or [6,6,6,6,6,6,6,6]
+ *  mode    – "hex" (0-9A-F, upper-cased) or "digit" (0-9)
+ */
+function buildSegments(containerId, groups, mode) {
+  const box = show(containerId);
+  const target = show(box.dataset.target);
+  const clean = (s) => (mode === "hex"
+      ? s.toUpperCase().replace(/[^0-9A-F]/g, "")
+      : s.replace(/\D/g, ""));
+  box.innerHTML = "";
+  const inputs = [];
+  groups.forEach((len, i) => {
+    if (i > 0) { const sep = document.createElement("span"); sep.className = "seg-sep"; sep.textContent = "-"; box.appendChild(sep); }
+    const inp = document.createElement("input");
+    inp.className = "seg"; inp.maxLength = len; inp.size = len + 1;
+    inp.setAttribute("inputmode", mode === "digit" ? "numeric" : "text");
+    inp.style.width = (len * 0.85 + 1.2) + "em";
+    box.appendChild(inp); inputs.push(inp);
+  });
+
+  const sync = () => { target.value = inputs.map(i => i.value).join(inputs.every(i=>!i.value) ? "" : "-").replace(/^-+|-+$/g,""); };
+  const fullValue = () => inputs.map(i => i.value).join("-");
+
+  function distribute(text, startIdx) {
+    let s = clean(text), idx = startIdx, overflow = false;
+    for (let i = idx; i < inputs.length; i++) {
+      const take = s.slice(0, groups[i]);
+      inputs[i].value = take;
+      s = s.slice(groups[i]);
+      if (!s) { inputs[Math.min(i, inputs.length - 1)].focus(); break; }
+    }
+    if (s.length) overflow = true;    // leftover chars beyond the last box
+    sync();
+    return overflow;
+  }
+
+  inputs.forEach((inp, i) => {
+    inp.addEventListener("input", () => {
+      inp.value = clean(inp.value).slice(0, groups[i]);
+      inp.classList.remove("invalid");
+      if (inp.value.length >= groups[i] && i < inputs.length - 1) inputs[i + 1].focus();
+      sync();
+    });
+    inp.addEventListener("keydown", (e) => {
+      if (e.key === "Backspace" && !inp.value && i > 0) { inputs[i - 1].focus(); }
+    });
+    inp.addEventListener("paste", (e) => {
+      e.preventDefault();
+      const text = (e.clipboardData || window.clipboardData).getData("text");
+      const overflow = distribute(text, i);
+      if (overflow) {
+        inputs.forEach(x => x.classList.add("invalid"));
+        alert("That's more characters than this field holds. Check the value — it exceeded the allowed length.");
+      }
+    });
+  });
+
+  return {
+    value: () => { sync(); return target.value; },
+    isComplete: () => inputs.every((inp, i) => inp.value.length === groups[i]),
+    clear: () => { inputs.forEach(i => { i.value = ""; i.classList.remove("invalid"); }); sync(); },
+    markInvalid: () => inputs.forEach(i => i.classList.add("invalid")),
+  };
+}
+
+let segKeyId = null, segKey = null;   // segmented controls for the device modal
 let SITES = [];
 async function loadSites() {
   try { SITES = await api("/sites"); } catch { SITES = []; }
@@ -366,6 +459,7 @@ function finishLogin(tok) {
   if (["admin","super_admin"].includes(c.role)) { show("btn-add").classList.remove("app-hidden"); show("btn-import").classList.remove("app-hidden"); }
   if (["auditor","super_admin"].includes(c.role)) show("btn-export-group").classList.remove("app-hidden");
   if (c.role === "super_admin") document.querySelectorAll(".app-super").forEach(e=>e.classList.remove("app-hidden"));
+  if (["admin","super_admin"].includes(c.role)) show("menu-settings").classList.remove("app-hidden");
   if (["admin","super_admin"].includes(c.role)) document.querySelectorAll(".app-admin-site").forEach(e=>e.classList.remove("app-hidden"));
   else document.querySelectorAll(".app-admin-site").forEach(e=>e.classList.add("app-hidden"));
   loadSites();
@@ -419,6 +513,9 @@ async function userAction(id, action, displayName) {
 show("btn-add-user").onclick = () => {
   ["u-first","u-last","u-mi","u-title","u-name","u-scope","u-pass"].forEach(i => show(i).value = "");
   fillSiteSelect("u-scope", null, "— all sites —");
+  // admins can create operators/auditors only; supers can also create admins
+  const adminOpt = show("u-role").querySelector('option[value="admin"]');
+  if (adminOpt) adminOpt.style.display = (claims().role === "super_admin") ? "" : "none";
   show("u-role").value = "operator"; show("u-err").textContent = "";
   $('#userModal').modal('show');
 };
@@ -538,6 +635,8 @@ show("btn-add").onclick = () => {
   show("ed-title").textContent = "Add device";
   show("ed-key-block").classList.remove("app-hidden");
   ["ed-host","ed-dept","ed-serial","ed-keyid","ed-key"].forEach(i => show(i).value = "");
+  segKeyId = buildSegments("ed-keyid-seg", [8,4,4,4,12], "hex");
+  segKey = buildSegments("ed-key-seg", [6,6,6,6,6,6,6,6], "digit");
   fillSiteSelect("ed-site", null);
   show("ed-err").textContent = "";
   $('#edModal').modal('show');
@@ -561,13 +660,30 @@ show("ed-save").onclick = async () => {
         hostname: show("ed-host").value, site: show("ed-site").value, department: show("ed-dept").value }) });
     } else {
       const host = show("ed-host").value.trim(), site = show("ed-site").value.trim();
-      const kid = show("ed-keyid").value.trim(), key = show("ed-key").value.trim();
+      const serial = show("ed-serial").value.trim();
       if (!host || !site) { show("ed-err").textContent = "Hostname and Site are required."; return; }
-      if (!kid || !key)   { show("ed-err").textContent = "Recovery Key ID and Recovery Key are required."; return; }
-      if (!/^\d{6}(-\d{6}){7}$/.test(key)) { show("ed-err").textContent = "Recovery Key must be 8 groups of 6 digits separated by dashes."; return; }
-      const dev = await api("/devices", { method:"POST", body: JSON.stringify({
+      if (!segKeyId.isComplete()) { segKeyId.markInvalid(); show("ed-err").textContent = "Recovery Key ID must be a full 8-4-4-4-12 identifier."; return; }
+      if (!segKey.isComplete())   { segKey.markInvalid(); show("ed-err").textContent = "Recovery Key must be all 8 groups of 6 digits (48 total)."; return; }
+      const kid = segKeyId.value(), key = segKey.value();
+
+      // create device, retrying with replace_existing if the serial already exists
+      const createDevice = (replace) => api("/devices", { method:"POST", body: JSON.stringify({
         hostname: host, site, department: show("ed-dept").value,
-        serial: show("ed-serial").value, volume_id: kid }) });
+        serial: serial || null, volume_id: kid, replace_existing: !!replace }) });
+
+      let dev;
+      try {
+        dev = await createDevice(false);
+      } catch (e) {
+        if (e.detail && e.detail.error === "duplicate_serial") {
+          const who = e.detail.existing.map(x => `${x.hostname} (${x.site})`).join(", ");
+          if (!confirm(`Serial ${serial} already belongs to: ${who}.\n\nArchive that record and replace it with this one? The old record is kept (archived), not deleted.`)) {
+            show("ed-err").textContent = "Cancelled — nothing was changed.";
+            return;
+          }
+          dev = await createDevice(true);
+        } else { throw e; }
+      }
       await api(`/devices/${dev.id}/keys`, { method:"POST", body: JSON.stringify({
         key_material: key, key_identifier: kid, source: "setup" }) });
     }

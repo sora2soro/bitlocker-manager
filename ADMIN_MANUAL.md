@@ -50,6 +50,9 @@ is gone — so escrow it (Zoho Vault) before enrolling anything real.
 | The Pico "type-the-key" firmware | `agent/pico/code.py` | `USE_NUMPAD`, `ARM_DELAY_S`, `main()`. |
 | The local bridge that writes keys to the Pico | `agent/unlock-helper.py` | `find_circuitpy`, `_load`, `HOST/PORT`. |
 | Tests (your safety net) | `tests/test_api.py`, `tests/test_vault_core.py` | Run `python -m pytest -q`. |
+| Recovery-data format rules (GUID / 48-digit) | `app/validators.py` | `normalize_recovery_key_id`, `normalize_recovery_key`. |
+| Packaging the helper as an `.exe` + auto-start | `packaging/` | `build-helper.ps1`, `install-helper.ps1`, `README.md`. |
+| Security testing / demos for management | `docs/SECURITY_TESTING.md` | DB encryption, SQL injection, data tampering proofs. |
 
 **Rule of thumb:** a change is usually *three files* — the model (`models.py`),
 the schema (`schemas.py`), and the endpoint (`api.py`) on the server; plus
