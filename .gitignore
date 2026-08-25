@@ -42,3 +42,6 @@ agent/dist/*.exe
 
 root.crt
 *.crt
+
+root.crt
+*.crt
