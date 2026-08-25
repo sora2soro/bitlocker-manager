@@ -239,6 +239,28 @@ def test_import_commit_admin_only_and_idempotent(app_client):
 
 # ---- SR3 + SR4: checkout lifecycle gate ----
 
+def test_download_unlock_helper(app_client, tmp_path):
+    import os, io, zipfile
+    # any logged-in user can reach it; anonymous cannot
+    assert app_client.get("/download/unlock-helper").status_code == 401
+    op = token_for(app_client, "cris", "pw-cris")
+    # exe not present on the server -> clear 503
+    r = app_client.get("/download/unlock-helper", headers=auth(op))
+    assert r.status_code == 503 and r.json()["detail"]["error"] == "exe_missing"
+    # drop a stand-in exe where the route looks, then expect a real zip
+    dist = os.path.join(os.path.dirname(__file__), "..", "agent", "dist")
+    os.makedirs(dist, exist_ok=True)
+    exe = os.path.join(dist, "blm-helper.exe")
+    open(exe, "wb").write(b"MZ stub")
+    try:
+        r = app_client.get("/download/unlock-helper", headers=auth(op))
+        assert r.status_code == 200 and r.headers["content-type"] == "application/zip"
+        names = zipfile.ZipFile(io.BytesIO(r.content)).namelist()
+        assert "install-helper.ps1" in names and "blm-helper.exe" in names
+    finally:
+        os.remove(exe)
+
+
 def test_duplicate_serial_archive_and_replace(app_client):
     admin = token_for(app_client, "admin", "pw-admin")
     KID = "0BCA25A7-DDF3-4E97-87F1-A643EB656942"

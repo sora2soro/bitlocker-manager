@@ -716,6 +716,44 @@ def create_app(*, engine=None, kek=None, settings=None) -> FastAPI:
                      detail=f"rows={len(rows)} fmt={fmt}")
         return _spreadsheet("audit-report", header, rows, fmt)
 
+    # ---------------- unlock helper download (operator self-service) ----------------
+    @app.get("/download/unlock-helper")
+    def download_unlock_helper(_: Operator = Depends(get_current_operator)):
+        """Serve a zip of the Windows Unlock Helper installer so any logged-in
+        operator can set up their own station. Contains install-helper.ps1 +
+        blm-helper.exe + a README. The exe must be built on Windows (build-helper.ps1)
+        and dropped into agent/dist/ on the server — it can't be built on Linux."""
+        import os as _os, zipfile as _zip
+        base = _os.path.dirname(__file__)
+        script = _os.path.join(base, "..", "packaging", "install-helper.ps1")
+        exe = _os.path.join(base, "..", "agent", "dist", "blm-helper.exe")
+        if not _os.path.isfile(exe):
+            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail={
+                "error": "exe_missing",
+                "message": "The Unlock Helper build isn't on the server yet. Build blm-helper.exe "
+                           "on a Windows machine with packaging/build-helper.ps1 and place it in "
+                           "agent/dist/ on the server."})
+        readme = (
+            "BitLocker Manager - Unlock Helper\r\n"
+            "=================================\r\n\r\n"
+            "This installs a small local bridge so the Unlock button can write the\r\n"
+            "recovery key onto your Pi Pico. It runs only on 127.0.0.1 (this PC).\r\n\r\n"
+            "TO INSTALL:\r\n"
+            "  1. Unzip both files into the same folder.\r\n"
+            "  2. Right-click install-helper.ps1 -> Run with PowerShell.\r\n"
+            "     (or: powershell -ExecutionPolicy Bypass -File install-helper.ps1)\r\n"
+            "  3. It installs the helper and sets it to start automatically at logon.\r\n"
+            "  4. Verify: open http://127.0.0.1:8765/ - you should see status ok.\r\n"
+            "  5. Plug your Pico into THIS PC and retry Unlock.\r\n")
+        buf = io.BytesIO()
+        with _zip.ZipFile(buf, "w", _zip.ZIP_DEFLATED) as z:
+            z.write(script, "install-helper.ps1")
+            z.write(exe, "blm-helper.exe")
+            z.writestr("README.txt", readme)
+        buf.seek(0)
+        return Response(content=buf.getvalue(), media_type="application/zip",
+                        headers={"Content-Disposition": 'attachment; filename="BLM-Unlock-Helper.zip"'})
+
     # ---------------- static operator UI (M5) ----------------
     # Served here for field-test convenience; in production the UI is a separate
     # front door (DSE Site / inventory embed) hitting this API over HTTPS.

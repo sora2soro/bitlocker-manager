@@ -37,5 +37,5 @@ desktop.ini
 .idea/
 *.swp
 
-__pycache__/
-*.pyc
+# Built helper binary — distribute out of band, don't commit
+agent/dist/*.exe
