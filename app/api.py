@@ -725,7 +725,9 @@ def create_app(*, engine=None, kek=None, settings=None) -> FastAPI:
         and dropped into agent/dist/ on the server — it can't be built on Linux."""
         import os as _os, zipfile as _zip
         base = _os.path.dirname(__file__)
-        script = _os.path.join(base, "..", "packaging", "install-helper.ps1")
+        pkg = _os.path.join(base, "..", "packaging")
+        script = _os.path.join(pkg, "install-helper.ps1")
+        launcher = _os.path.join(pkg, "install-helper.cmd")
         exe = _os.path.join(base, "..", "agent", "dist", "blm-helper.exe")
         if not _os.path.isfile(exe):
             raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail={
@@ -738,15 +740,18 @@ def create_app(*, engine=None, kek=None, settings=None) -> FastAPI:
             "=================================\r\n\r\n"
             "This installs a small local bridge so the Unlock button can write the\r\n"
             "recovery key onto your Pi Pico. It runs only on 127.0.0.1 (this PC).\r\n\r\n"
-            "TO INSTALL:\r\n"
-            "  1. Unzip both files into the same folder.\r\n"
-            "  2. Right-click install-helper.ps1 -> Run with PowerShell.\r\n"
-            "     (or: powershell -ExecutionPolicy Bypass -File install-helper.ps1)\r\n"
-            "  3. It installs the helper and sets it to start automatically at logon.\r\n"
+            "TO INSTALL (easiest):\r\n"
+            "  1. Unzip ALL files into the same folder.\r\n"
+            "  2. Double-click install-helper.cmd.\r\n"
+            "  3. Wait for the green SUCCESS message. (A red FAILED message tells\r\n"
+            "     you what went wrong - some PCs need it run as Administrator.)\r\n"
             "  4. Verify: open http://127.0.0.1:8765/ - you should see status ok.\r\n"
-            "  5. Plug your Pico into THIS PC and retry Unlock.\r\n")
+            "  5. Plug your Pico into THIS PC and retry Unlock.\r\n\r\n"
+            "The helper installs an auto-start task, so it comes back after every\r\n"
+            "reboot - you only run this installer once.\r\n")
         buf = io.BytesIO()
         with _zip.ZipFile(buf, "w", _zip.ZIP_DEFLATED) as z:
+            z.write(launcher, "install-helper.cmd")
             z.write(script, "install-helper.ps1")
             z.write(exe, "blm-helper.exe")
             z.writestr("README.txt", readme)

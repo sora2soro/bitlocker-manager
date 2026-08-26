@@ -39,9 +39,3 @@ desktop.ini
 
 # Built helper binary — distribute out of band, don't commit
 agent/dist/*.exe
-
-root.crt
-*.crt
-
-root.crt
-*.crt
