@@ -29,7 +29,8 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     name='blm-helper',
-    console=True,          # keep the console so operators can see "listening on 127.0.0.1:8765"
+    console=False,         # windowless: no console pops up. Startup/errors go to
+                           # %LOCALAPPDATA%\BLMHelper\helper.log instead.
     onefile=True,
     upx=False,
     icon=None,             # add 'blm.ico' here if you want a custom icon

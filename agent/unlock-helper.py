@@ -15,10 +15,29 @@ It listens on http://127.0.0.1:8765 (localhost only — not reachable from the n
 from __future__ import annotations
 
 import json
+import os
 import ssl
 import string
+import sys
 import urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
+
+# When this is built as a windowless .exe (PyInstaller console=False), Python has
+# no console, so sys.stdout / sys.stderr are None and any print() would crash the
+# helper the instant it launches. Redirect them to a log file so the helper runs
+# invisibly AND still leaves a diagnostic trail. If the log can't be opened, fall
+# back to the null device so logging can never stop the helper from starting.
+if sys.stdout is None or sys.stderr is None:
+    try:
+        _logdir = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "BLMHelper")
+        os.makedirs(_logdir, exist_ok=True)
+        _sink = open(os.path.join(_logdir, "helper.log"), "a", buffering=1, encoding="utf-8")
+    except Exception:
+        _sink = open(os.devnull, "w")
+    if sys.stdout is None:
+        sys.stdout = _sink
+    if sys.stderr is None:
+        sys.stderr = _sink
 
 HOST, PORT = "127.0.0.1", 8765
 SECRET_FILE = "blm_secret.txt"
@@ -102,10 +121,11 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    print("BitLocker Manager — Unlock Helper")
-    print(f"Listening on http://{HOST}:{PORT}  (localhost only)")
-    print("Leave this window open while unlocking machines. Press Ctrl+C to stop.")
+    import datetime as _dt
+    _ts = _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{_ts}] BitLocker Manager Unlock Helper starting")
+    print(f"[{_ts}] Listening on http://{HOST}:{PORT}  (localhost only)")
     try:
         HTTPServer((HOST, PORT), Handler).serve_forever()
     except KeyboardInterrupt:
-        print("\nUnlock Helper stopped.")
+        print("Unlock Helper stopped.")
