@@ -1,8 +1,8 @@
 <#
-  build-helper.ps1  — build the Unlock Helper into a single .exe
+  build-helper.ps1  - build the Unlock Helper into a single .exe
 
   Run this ONCE on a Windows machine that has Python 3.11+.
-  It produces  dist\blm-helper.exe  — that single file is what you copy to
+  It produces  dist\blm-helper.exe  - that single file is what you copy to
   operator PCs. Those PCs need NOTHING installed (no Python, no repo).
 
   Usage:

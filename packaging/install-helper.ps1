@@ -1,12 +1,12 @@
 <#
-  install-helper.ps1 — install the Unlock Helper on an operator PC and make it
+  install-helper.ps1 - install the Unlock Helper on an operator PC and make it
   start automatically at logon.
 
   Run this ONCE per operator PC. Easiest: double-click install-helper.cmd
   (which runs this with the right execution policy). Or run directly:
       powershell -ExecutionPolicy Bypass -File install-helper.ps1
 
-  It does NOT need Python — it places blm-helper.exe and registers a logon
+  It does NOT need Python - it places blm-helper.exe and registers a logon
   Scheduled Task so the helper is always listening on 127.0.0.1:8765.
 
   Uninstall:
@@ -47,7 +47,7 @@ try {
 # --- 3. register the logon Scheduled Task, and CHECK it worked ------------
 # schtasks is a native program: PowerShell's -ErrorAction Stop does NOT catch
 # its failures, so we must inspect $LASTEXITCODE ourselves and then verify the
-# task actually exists. (This is the bug the old installer had — it reported
+# task actually exists. (This is the bug the old installer had - it reported
 # success even when task creation silently failed.)
 schtasks /create /tn "$TaskName" /tr "`"$TargetExe`"" /sc onlogon /f 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) {
@@ -63,7 +63,7 @@ if ($LASTEXITCODE -ne 0) {
 Start-Process -FilePath $TargetExe
 
 Write-Host ""
-Write-Host "SUCCESS — Unlock Helper installed and running." -ForegroundColor Green
-Write-Host "  * Auto-start task '$TaskName' is registered (verified)."
-Write-Host "  * It will relaunch automatically at every logon."
-Write-Host "  * Verify now: open http://127.0.0.1:8765/ — you should see status ok."
+Write-Host "SUCCESS - Unlock Helper installed and running." -ForegroundColor Green
+Write-Host "  Auto-start task registered and verified."
+Write-Host "  It will relaunch automatically at every logon."
+Write-Host "  Verify now: open http://127.0.0.1:8765/ - you should see status ok."
