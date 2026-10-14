@@ -115,8 +115,11 @@ class DeviceOut(BaseModel):
 
 
 class ImportRow(BaseModel):
-    hostname: str
-    site: str
+    # hostname/site may be blank on batches from other sites (e.g. a folder of
+    # native Windows .txt files, which carry neither). The identifier + key are
+    # the only truly required fields; missing hostname/serial get flagged later.
+    hostname: str | None = None
+    site: str | None = None
     key_identifier: str
     key_material: str
     serial: str | None = None

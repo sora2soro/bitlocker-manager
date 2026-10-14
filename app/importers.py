@@ -104,8 +104,10 @@ def parse_csv(csv_text: str) -> tuple[list[dict], dict, list[str]]:
             row = {t: (raw[idx].strip() if idx < len(raw) else "") for t, idx in mapping.items()}
         except IndexError:
             warnings.append(f"row {i}: fewer columns than headers"); continue
-        # Skip clearly empty / incomplete rows quietly
-        if not row.get("hostname") or not row.get("key_material"):
+        # A row is usable if it has the recovery key AND the identifier.
+        # Hostname/serial may be blank on batches from other sites — those
+        # import fine and get flagged for enrichment, so don't require them.
+        if not row.get("key_material") or not row.get("key_identifier"):
             continue
         # Validate the 48-digit recovery key shape
         if not _KEY48.fullmatch(row["key_material"]):

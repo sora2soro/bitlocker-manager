@@ -442,3 +442,46 @@ def test_audit_visible_to_auditor_and_valid(app_client):
     assert any(e["action"] == "device_enrolled" for e in r.json()["entries"])
     # operator may not read the audit log
     assert app_client.get("/audit", headers=auth(cris)).status_code == 403
+
+
+# ---- import: batches from other sites arrive with blank Hostname/Serial ----
+BLANK_HOST_CSV = (
+    "Hostname,Site,Serial,Identifier,Recovery Key\r\n"
+    ",MKT,,02F1627E-E6BB-4C88-BEB6-971642D18FBE,480755-179740-486255-369237-128238-261228-496496-663289\r\n"
+    ",MKT,,0083C9BF-B4A5-4D82-9628-9FB973CD5966,196262-472593-389191-267685-196911-072039-548713-484495\r\n"
+    ",MKT,,00D597F6-8680-4D2F-B486-3D2DD2F978C1,093940-564421-464706-639914-543433-053977-370546-424589\r\n"
+)
+
+
+def test_import_csv_with_blank_hostname_commits_and_flags(app_client):
+    admin = token_for(app_client, "admin", "pw-admin")
+    # 1. parse keeps all rows even though Hostname/Serial are blank
+    r = app_client.post("/import/parse-csv", headers=auth(admin),
+                        files={"file": ("keys.csv", BLANK_HOST_CSV, "text/csv")})
+    assert r.status_code == 200, r.text
+    rows = r.json()["rows"]
+    assert len(rows) == 3, rows            # was 0 before the fix (blank host skipped)
+
+    # 2. commit enrolls all three as distinct devices (not collapsed by blank host)
+    r = app_client.post("/import/commit", headers=auth(admin), json=rows)
+    assert r.status_code == 200, r.text
+    assert r.json() == {"created": 3, "skipped": 0, "errors": []}
+
+    # 3. re-commit is idempotent — deduped by Recovery Key ID, not hostname
+    r = app_client.post("/import/commit", headers=auth(admin), json=rows)
+    assert r.json()["created"] == 0 and r.json()["skipped"] == 3, r.text
+
+    # 4. they surface in the data-quality list as missing hostname
+    r = app_client.get("/devices-quality/incomplete", headers=auth(admin))
+    assert r.status_code == 200, r.text
+    assert r.json()["missing_hostname"] >= 3
+
+
+def test_import_native_txt_row_has_no_hostname(app_client):
+    """A row parsed from a native Windows .txt (no hostname/site) still commits."""
+    admin = token_for(app_client, "admin", "pw-admin")
+    row = {"key_identifier": "0A8DC46F-385F-40CA-880C-A756000BA5CF",
+           "key_material": "050182-276969-178871-059477-628903-057442-200387-661045"}
+    r = app_client.post("/import/commit", headers=auth(admin), json=[row])
+    assert r.status_code == 200, r.text
+    assert r.json()["created"] == 1, r.text
