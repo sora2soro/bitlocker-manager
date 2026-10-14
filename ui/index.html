@@ -28,7 +28,7 @@
 <div class="container-fluid" style="max-width:1100px;">
   <div class="brand rounded mt-3 d-flex justify-content-between align-items-center">
     <span><i class="fas fa-lock mr-2"></i>BitLocker Manager</span>
-    <div class="dropdown">
+    <div class="dropdown app-hidden" id="user-menu">
       <a href="#" id="whoami" class="small font-weight-normal text-white dropdown-toggle" data-toggle="dropdown" style="text-decoration:none;"></a>
       <div class="dropdown-menu dropdown-menu-right">
         <h6 class="dropdown-header" id="whoami-header"></h6>
@@ -454,6 +454,7 @@ function finishLogin(tok) {
   const c = claims();
   show("whoami").innerHTML = c.sub ? `${c.role}${c.scope ? " · "+c.scope : ""} <span class="caret"></span>` : "";
   show("whoami-header").textContent = c.role ? `Signed in — ${c.role}` : "";
+  show("user-menu").classList.remove("app-hidden");   // reveal the account menu only once signed in
   show("view-login").classList.add("app-hidden");
   show("view-app").classList.remove("app-hidden");
   if (["auditor","admin","super_admin"].includes(c.role)) document.querySelectorAll(".app-audit").forEach(e=>e.classList.remove("app-hidden"));
