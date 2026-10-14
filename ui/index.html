@@ -189,7 +189,7 @@
     </ul>
     <div id="imp-tab-txt">
       <input type="file" id="imp-txt-files" class="form-control-file" accept=".txt" multiple>
-      <small class="text-muted">Select one or many <code>BitLocker_Recovery_Key_*.txt</code> files. Hostname, Site, and Serial are auto-extracted from the filename.</small>
+      <small class="text-muted">Select one or many <code>BitLocker_Recovery_Key_*.txt</code> files. Hostname, Site, and Serial are auto-extracted from the filename when present — native Windows files carry only the Identifier + key, so those import blank and get flagged for enrichment.</small>
     </div>
     <div id="imp-tab-csv" class="app-hidden">
       <input type="file" id="imp-csv-file" class="form-control-file" accept=".csv">
@@ -731,8 +731,11 @@ show("imp-txt-files").onchange = async (e) => {
   const fd = new FormData(); files.forEach(f => fd.append("files", f));
   try {
     const r = await apiUpload("/import/parse-txt", fd);
-    impRows = r.parsed.filter(p => p.hostname && p.site && p.key_identifier && p.key_material).map(p => ({
-      hostname: p.hostname, site: p.site, serial: p.serial || null,
+    // Native Windows .txt files carry only the Identifier + Recovery Key;
+    // hostname/site aren't in the file, so don't require them — they import
+    // blank and get flagged for enrichment, same as the CSV path.
+    impRows = r.parsed.filter(p => p.key_identifier && p.key_material).map(p => ({
+      hostname: p.hostname || null, site: p.site || null, serial: p.serial || null,
       key_identifier: p.key_identifier, key_material: p.key_material,
     }));
     renderImpPreview(impRows, r.errors, `${files.length} file(s)`);
@@ -759,7 +762,7 @@ function renderImpPreview(rows, warnings, note) {
       <table class="table table-sm table-bordered mb-0"><thead><tr>
         <th>Hostname</th><th>Site</th><th>Serial</th><th>Identifier</th><th>Recovery Key</th></tr></thead>
       <tbody>${first.map(r => `<tr>
-        <td class="font-weight-bold">${esc(r.hostname)}</td><td>${esc(r.site)}</td>
+        <td class="font-weight-bold">${esc(r.hostname) || '<span class="text-muted">—</span>'}</td><td>${esc(r.site) || '<span class="text-muted">—</span>'}</td>
         <td class="mono small">${esc(r.serial)||''}</td>
         <td class="mono small">${esc(r.key_identifier)}</td>
         <td class="mono small text-muted">${esc(r.key_material.slice(0,7))}…<em>hidden</em></td>

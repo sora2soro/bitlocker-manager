@@ -624,20 +624,31 @@ def create_app(*, engine=None, kek=None, settings=None) -> FastAPI:
                       kek=Depends(get_kek)):
         created, skipped, errors = 0, 0, []
         for r in rows:
-            # skip duplicates by hostname (idempotent re-runs, safe)
-            existing = session.execute(select(Device).where(Device.hostname == r.hostname)).scalar_one_or_none()
-            if existing:
-                skipped += 1
-                continue
-            # validate the key formats before enrolling; bad rows are reported, not committed
+            # validate the key formats first; bad rows are reported, not committed
             try:
                 key_material = normalize_recovery_key(r.key_material)
                 key_id = (normalize_recovery_key_id(r.key_identifier)
                           if r.key_identifier else None)
             except ValueError as e:
-                errors.append(f"{r.hostname}: {e}")
+                errors.append(f"{r.hostname or r.key_identifier or '?'}: {e}")
                 continue
-            d = Device(hostname=r.hostname, site=r.site, serial=r.serial,
+            label = r.hostname or key_id or "?"
+            # Dedupe on the Recovery Key ID — the real unique key for a key record.
+            # Hostname can't be the dedupe key: batches from other sites arrive with
+            # it blank, and "" == "" would collapse every such row into one device.
+            if key_id:
+                existing = session.execute(
+                    select(Device).where(Device.volume_id == key_id)).scalar_one_or_none()
+            elif r.hostname:
+                existing = session.execute(
+                    select(Device).where(Device.hostname == r.hostname)).scalar_one_or_none()
+            else:
+                existing = None
+            if existing:
+                skipped += 1
+                continue
+            d = Device(hostname=(r.hostname or ""), site=(r.site or ""),
+                       serial=(r.serial or None),
                        volume_id=key_id, encryption_status="encrypted")
             session.add(d); session.flush()
             try:
@@ -646,7 +657,7 @@ def create_app(*, engine=None, kek=None, settings=None) -> FastAPI:
                                  key_identifier=key_id, source="backfill")
                 created += 1
             except Exception as e:
-                errors.append(f"{r.hostname}: {e}")
+                errors.append(f"{label}: {e}")
         append_audit(session, action="import_committed", operator_id=operator.id,
                      detail=f"created={created} skipped={skipped} errors={len(errors)}")
         return ImportResp(created=created, skipped=skipped, errors=errors)
