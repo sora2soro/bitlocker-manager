@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html class="h-full bg-surface" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>BitLocker Manager — Fleet</title>
+<link rel="stylesheet" href="assets/app.css"/>
+</head>
+<body class="min-h-full bg-background font-body-md text-on-surface antialiased flex flex-col">
+
+<!-- TOP BAR -->
+<header class="w-full bg-primary text-on-primary shadow-sm border-b border-outline-variant/30">
+  <div class="max-w-[1440px] mx-auto px-space-lg py-space-sm flex items-center justify-between">
+    <div class="flex items-center gap-space-xl">
+      <a class="flex items-center gap-2 text-headline-md font-semibold text-on-primary" href="/ui/fleet.html">
+        <span class="material-symbols-outlined text-[22px]">lock</span><span>BitLocker Manager</span>
+      </a>
+      <nav class="hidden md:flex items-center gap-6">
+        <a class="text-on-primary font-semibold border-b-2 border-secondary-fixed text-label-md py-1" href="/ui/fleet.html">Fleet</a>
+        <a class="text-primary-fixed hover:text-on-primary text-label-md py-1" href="/ui/">Keys</a>
+        <a class="text-primary-fixed hover:text-on-primary text-label-md py-1" href="/ui/">Audit</a>
+        <a id="nav-settings" class="text-primary-fixed hover:text-on-primary text-label-md py-1 hidden" href="/ui/users.html">Settings</a>
+      </nav>
+    </div>
+    <div class="relative">
+      <button id="profile-btn" class="flex items-center gap-2 bg-primary-container/40 hover:bg-primary-container/60 cursor-pointer transition-all px-3 py-1.5 rounded-lg border border-primary-fixed-dim/30">
+        <span id="avatar-top" class="w-6 h-6 rounded-full bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center font-bold text-xs uppercase">SA</span>
+        <span id="whoami" class="text-label-md font-medium text-on-primary">—</span>
+        <span class="material-symbols-outlined text-[18px] text-primary-fixed">arrow_drop_down</span>
+      </button>
+      <div id="profile-menu" class="hidden absolute right-0 mt-1 w-48 bg-surface-container-lowest rounded-lg border border-outline-variant shadow-lg py-1 z-20">
+        <a id="menu-settings" href="/ui/users.html" class="hidden flex items-center gap-2 px-3 py-2 text-body-md text-on-surface hover:bg-surface-container"><span class="material-symbols-outlined text-[18px]">manage_accounts</span>Settings — Users</a>
+        <button id="menu-helper" class="w-full text-left flex items-center gap-2 px-3 py-2 text-body-md text-on-surface hover:bg-surface-container"><span class="material-symbols-outlined text-[18px]">download</span>Download Unlock Helper</button>
+        <div class="my-1 border-t border-outline-variant/40"></div>
+        <button id="signout" class="w-full text-left flex items-center gap-2 px-3 py-2 text-body-md text-error hover:bg-surface-container"><span class="material-symbols-outlined text-[18px]">logout</span>Sign out</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- SUB-HEADER -->
+<section class="bg-surface-container-lowest border-b border-outline-variant/40">
+  <div class="max-w-[1440px] mx-auto px-space-lg py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div class="flex flex-col gap-1">
+      <div class="flex items-center gap-2 text-body-sm text-outline">
+        <span class="material-symbols-outlined text-[16px] text-primary">devices</span><span class="font-medium text-on-surface">Fleet</span>
+      </div>
+      <div class="flex items-baseline gap-3">
+        <h1 class="text-headline-lg text-on-surface">Device Fleet &amp; Recovery Keys</h1>
+        <span id="scope-badge" class="inline-flex items-center px-2 py-0.5 rounded-full text-label-sm bg-surface-container text-primary font-medium">—</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MAIN -->
+<main class="flex-1 max-w-[1440px] w-full mx-auto px-space-lg py-6 flex flex-col gap-5">
+  <!-- WORKBENCH -->
+  <div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant/50 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+    <div class="relative min-w-[280px] max-w-md w-full flex-1">
+      <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-outline pointer-events-none">search</span>
+      <input id="search" class="w-full pl-9 pr-4 py-2 bg-surface text-on-surface text-body-md rounded-lg border border-outline-variant focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-outline/70" placeholder="Search hostname, serial, or Recovery Key ID..." type="text"/>
+    </div>
+    <div class="flex items-center gap-2">
+      <button id="btn-dq" class="hidden inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest hover:bg-surface-container text-body-md text-on-surface transition-colors"><span class="material-symbols-outlined text-[18px] text-tertiary">cleaning_services</span><span>Data quality</span></button>
+      <button id="btn-export" class="hidden inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest hover:bg-surface-container text-body-md text-on-surface transition-colors"><span class="material-symbols-outlined text-[18px]">download</span><span>Export</span></button>
+      <button id="btn-import" class="hidden inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest hover:bg-surface-container text-body-md text-on-surface transition-colors"><span class="material-symbols-outlined text-[18px] text-primary">file_upload</span><span>Import</span></button>
+      <button id="btn-add" class="hidden inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-on-secondary hover:bg-on-secondary-container font-semibold text-body-md shadow-sm transition-all active:scale-98"><span class="material-symbols-outlined text-[20px]">add</span><span>Add device</span></button>
+    </div>
+  </div>
+
+  <!-- TABLE -->
+  <div class="bg-surface-container-lowest rounded-xl border border-outline-variant/60 shadow-sm overflow-hidden flex flex-col">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="bg-surface border-b border-outline-variant/50 text-label-sm text-outline uppercase tracking-wider">
+            <th class="py-3.5 px-4 pl-6">Hostname</th>
+            <th class="py-3.5 px-4">Serial</th>
+            <th class="py-3.5 px-4">Site</th>
+            <th class="py-3.5 px-4">Recovery Key ID</th>
+            <th class="py-3.5 px-4">Status</th>
+            <th class="py-3.5 pr-6 pl-4 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="rows" class="divide-y divide-outline-variant/30 text-body-md"></tbody>
+      </table>
+    </div>
+    <div class="px-6 py-3.5 bg-surface border-t border-outline-variant/40 flex items-center justify-between text-body-sm text-outline">
+      <div id="footer-count">—</div>
+      <div class="flex items-center gap-2">
+        <button id="prev" class="p-1 rounded text-outline hover:text-on-surface disabled:text-outline-variant disabled:cursor-not-allowed" disabled><span class="material-symbols-outlined text-[18px]">chevron_left</span></button>
+        <span id="page-label" class="px-2.5 py-0.5 rounded bg-surface-container font-semibold text-primary">1</span>
+        <button id="next" class="p-1 rounded text-outline hover:text-on-surface disabled:text-outline-variant disabled:cursor-not-allowed" disabled><span class="material-symbols-outlined text-[18px]">chevron_right</span></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-surface-container-low border border-surface-container-high rounded-xl p-4 flex items-start gap-3.5">
+    <span class="material-symbols-outlined text-primary text-[22px] mt-0.5 shrink-0">info</span>
+    <div class="flex-1">
+      <h4 class="text-label-md font-semibold text-on-surface">Recovery keys are never shown in this list</h4>
+      <p class="text-body-sm text-outline mt-0.5 leading-relaxed">Only the Recovery Key ID (the lookup handle shown on the BitLocker recovery screen) appears here. Use <b>Unlock</b> to provision a key to a Pico, or break-glass <b>Reveal</b> (super-admins, logged as high-severity) when the USB path fails.</p>
+    </div>
+  </div>
+</main>
+
+<!-- toast -->
+<div id="toast" class="hidden fixed bottom-5 left-1/2 -translate-x-1/2 z-40 px-4 py-2.5 rounded-lg bg-inverse-surface text-inverse-on-surface text-body-md shadow-lg"></div>
+
+<script>
+const TOKEN = sessionStorage.getItem("blm_token");
+if (!TOKEN) location.replace("/ui/login.html");
+const esc = s => (s==null?"":String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function claims(){ try { const p = TOKEN.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'); return JSON.parse(decodeURIComponent(escape(atob(p)))); } catch(e){ return {}; } }
+async function api(path, opts={}){
+  const r = await fetch(path, {...opts, headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN, ...(opts.headers||{})}});
+  if (r.status === 401){ sessionStorage.removeItem("blm_token"); location.replace("/ui/login.html"); return new Promise(()=>{}); }
+  const b = await r.json().catch(()=>({}));
+  if (!r.ok) throw new Error(b.detail || ("HTTP "+r.status));
+  return b;
+}
+const show = id => document.getElementById(id);
+const ME = claims();
+const isSuper = ME.role === "super_admin";
+const canManage = ["admin","super_admin"].includes(ME.role);
+const canExport = ["auditor","super_admin"].includes(ME.role);
+
+// profile + role-gated chrome
+function segInitials(name){ const s=(name||"?").split(/[^A-Za-z0-9]+/).filter(Boolean); return (s.slice(0,2).map(x=>x[0]).join("")||(name||"?")[0]).toUpperCase(); }
+show("whoami").textContent = ME.role + (ME.scope ? " · "+ME.scope : "");
+show("avatar-top").textContent = segInitials(ME.sub);
+show("scope-badge").textContent = ME.scope ? ("Scope · "+ME.scope) : "All sites";
+if (canManage){ show("menu-settings").classList.remove("hidden"); show("nav-settings").classList.remove("hidden"); show("btn-add").classList.remove("hidden"); show("btn-import").classList.remove("hidden"); }
+if (["auditor","admin","super_admin"].includes(ME.role)) show("btn-dq").classList.remove("hidden");
+if (canExport) show("btn-export").classList.remove("hidden");
+
+show("profile-btn").onclick = e => { e.stopPropagation(); show("profile-menu").classList.toggle("hidden"); };
+document.addEventListener("click", () => show("profile-menu").classList.add("hidden"));
+show("signout").onclick = () => { sessionStorage.removeItem("blm_token"); location.replace("/ui/login.html"); };
+
+let toastT = null;
+function toast(msg){ const t = show("toast"); t.textContent = msg; t.classList.remove("hidden"); clearTimeout(toastT); toastT = setTimeout(()=>t.classList.add("hidden"), 2200); }
+function soon(){ toast("This flow lands in the next migration step."); }
+["menu-helper","btn-dq","btn-export","btn-import","btn-add"].forEach(id => show(id).onclick = soon);
+
+// ---- devices list ----
+let q = "", page = 0; const SIZE = 25;
+async function load(){
+  const off = page * SIZE;
+  let rows = [];
+  try { rows = await api(`/devices?q=${encodeURIComponent(q)}&limit=${SIZE}&offset=${off}`); }
+  catch(e){ show("rows").innerHTML = `<tr><td colspan="6" class="py-6 px-6 text-error">${esc(e.message)}</td></tr>`; return; }
+  draw(rows, off);
+}
+function draw(rows, off){
+  show("prev").disabled = page === 0;
+  show("next").disabled = rows.length < SIZE;
+  show("page-label").textContent = page + 1;
+  show("footer-count").innerHTML = rows.length
+    ? `Showing <span class='font-semibold text-on-surface'>${off+1}–${off+rows.length}</span> · page ${page+1}`
+    : "No devices on this page";
+  show("rows").innerHTML = rows.map(d => {
+    const host = d.hostname && d.hostname.trim() ? esc(d.hostname) : `<span class="text-outline">—</span>`;
+    const serial = d.serial ? `<span class="font-code-sm text-code-sm">${esc(d.serial)}</span>` : `<span class="text-outline">—</span>`;
+    const keyid = d.recovery_key_id ? `<span class="font-code-sm text-code-sm text-on-surface-variant">${esc(d.recovery_key_id)}</span>` : `<span class="text-outline">—</span>`;
+    const site = d.site ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-label-sm bg-surface-container text-primary font-medium">${esc(d.site)}</span>` : `<span class="text-outline">—</span>`;
+    const status = d.has_active_key
+      ? `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-label-sm font-semibold bg-secondary-container/60 text-secondary border border-secondary-fixed"><span class="material-symbols-outlined text-[13px]">lock</span>key on file</span>`
+      : `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-label-sm font-semibold bg-tertiary-fixed text-on-tertiary-fixed-variant border border-tertiary-fixed-dim"><span class="material-symbols-outlined text-[13px]">lock_open</span>no key</span>`;
+    const unlock = d.has_active_key ? `<button data-act="unlock" class="row-act inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-primary text-on-primary text-label-md font-medium hover:bg-surface-tint"><span class="material-symbols-outlined text-[16px]">usb</span>Unlock</button>` : "";
+    const reveal = (isSuper && d.has_active_key) ? `<button data-act="reveal" class="row-act inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-error/40 text-error text-label-md font-medium hover:bg-error-container/40"><span class="material-symbols-outlined text-[16px]">key</span>Reveal</button>` : "";
+    const edit = isSuper ? `<button data-act="edit" class="row-act p-1.5 rounded-md border border-outline-variant text-outline hover:text-on-surface hover:bg-surface-container" title="Edit"><span class="material-symbols-outlined text-[16px]">edit</span></button>` : "";
+    const archive = isSuper ? `<button data-act="archive" class="row-act p-1.5 rounded-md border border-outline-variant text-outline hover:text-on-surface hover:bg-surface-container" title="Archive"><span class="material-symbols-outlined text-[16px]">inventory_2</span></button>` : "";
+    return `<tr class="hover:bg-surface transition-colors">
+      <td class="py-4 px-4 pl-6 font-semibold text-on-surface">${host}</td>
+      <td class="py-4 px-4">${serial}</td>
+      <td class="py-4 px-4 whitespace-nowrap">${site}</td>
+      <td class="py-4 px-4 whitespace-nowrap">${keyid}</td>
+      <td class="py-4 px-4 whitespace-nowrap">${status}</td>
+      <td class="py-4 pr-6 pl-4 text-right whitespace-nowrap"><div class="inline-flex items-center gap-1.5">${unlock}${reveal}${edit}${archive}</div></td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="6" class="py-10 text-center text-outline">No devices match.</td></tr>`;
+  show("rows").querySelectorAll(".row-act").forEach(b => b.onclick = soon);
+}
+let st = null;
+show("search").oninput = e => { q = e.target.value; page = 0; clearTimeout(st); st = setTimeout(load, 200); };
+show("prev").onclick = () => { if (page>0){ page--; load(); } };
+show("next").onclick = () => { page++; load(); };
+load();
+</script>
+</body>
+</html>
