@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html class="h-full bg-surface" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>BitLocker Manager — Users</title>
+<link rel="stylesheet" href="assets/app.css"/>
+<script src="assets/qrcode.js"></script>
+</head>
+<body class="min-h-full bg-background font-body-md text-on-surface antialiased flex flex-col">
+
+<!-- TOP BAR -->
+<header class="w-full bg-primary text-on-primary shadow-sm border-b border-outline-variant/30">
+  <div class="max-w-[1440px] mx-auto px-space-lg py-space-sm flex items-center justify-between">
+    <div class="flex items-center gap-space-xl">
+      <a class="flex items-center gap-2 text-headline-md font-semibold text-on-primary" href="/ui/">
+        <span class="material-symbols-outlined text-[22px]">lock</span><span>BitLocker Manager</span>
+      </a>
+      <nav class="hidden md:flex items-center gap-6">
+        <a class="text-primary-fixed hover:text-on-primary text-label-md py-1" href="/ui/">Fleet</a>
+        <a class="text-primary-fixed hover:text-on-primary text-label-md py-1" href="/ui/">Keys</a>
+        <a class="text-primary-fixed hover:text-on-primary text-label-md py-1" href="/ui/">Audit</a>
+        <a class="text-on-primary font-semibold border-b-2 border-secondary-fixed text-label-md py-1" href="#">Settings</a>
+      </nav>
+    </div>
+    <div class="relative">
+      <button id="profile-btn" class="flex items-center gap-2 bg-primary-container/40 hover:bg-primary-container/60 cursor-pointer transition-all px-3 py-1.5 rounded-lg border border-primary-fixed-dim/30">
+        <span id="avatar-top" class="w-6 h-6 rounded-full bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center font-bold text-xs uppercase">SA</span>
+        <span id="whoami" class="text-label-md font-medium text-on-primary">—</span>
+        <span class="material-symbols-outlined text-[18px] text-primary-fixed">arrow_drop_down</span>
+      </button>
+      <div id="profile-menu" class="hidden absolute right-0 mt-1 w-44 bg-surface-container-lowest rounded-lg border border-outline-variant shadow-lg py-1 z-20">
+        <a href="/ui/" class="flex items-center gap-2 px-3 py-2 text-body-md text-on-surface hover:bg-surface-container"><span class="material-symbols-outlined text-[18px]">arrow_back</span>Back to app</a>
+        <button id="signout" class="w-full text-left flex items-center gap-2 px-3 py-2 text-body-md text-error hover:bg-surface-container"><span class="material-symbols-outlined text-[18px]">logout</span>Sign out</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- SUB-HEADER -->
+<section class="bg-surface-container-lowest border-b border-outline-variant/40">
+  <div class="max-w-[1440px] mx-auto px-space-lg py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div class="flex flex-col gap-1">
+      <div class="flex items-center gap-2 text-body-sm text-outline">
+        <span class="material-symbols-outlined text-[16px] text-primary">manage_accounts</span>
+        <span>Settings</span><span class="text-outline-variant">/</span>
+        <span class="font-medium text-on-surface">Users</span>
+      </div>
+      <div class="flex items-baseline gap-3">
+        <h1 class="text-headline-lg text-on-surface">Enterprise Access Control — Users</h1>
+        <span id="count-badge" class="inline-flex items-center px-2 py-0.5 rounded-full text-label-sm bg-surface-container text-primary font-medium">—</span>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <a href="/ui/" class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest hover:bg-surface-container text-on-surface text-label-md font-medium transition-colors shadow-sm">
+        <span class="material-symbols-outlined text-[18px]">arrow_back</span><span>Back to app</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- MAIN -->
+<main class="flex-1 max-w-[1440px] w-full mx-auto px-space-lg py-6 flex flex-col gap-5">
+  <!-- WORKBENCH -->
+  <div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant/50 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+    <div class="flex flex-wrap items-center gap-3 flex-1">
+      <div class="relative min-w-[280px] max-w-md w-full">
+        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-outline pointer-events-none">search</span>
+        <input id="search" class="w-full pl-9 pr-4 py-2 bg-surface text-on-surface text-body-md rounded-lg border border-outline-variant focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-outline/70" placeholder="Search by name, role, scope, or username..." type="text"/>
+      </div>
+      <div id="role-pills" class="inline-flex p-1 bg-surface-container rounded-lg border border-outline-variant/30 text-label-md"></div>
+    </div>
+    <div class="flex items-center gap-3">
+      <button id="status-toggle" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest hover:bg-surface-container text-body-md text-on-surface transition-colors">
+        <span class="material-symbols-outlined text-[18px] text-secondary">check_circle</span>
+        <span id="status-label">Status: Active</span>
+        <span class="material-symbols-outlined text-[16px] text-outline">keyboard_arrow_down</span>
+      </button>
+      <button id="btn-add" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-on-secondary hover:bg-on-secondary-container font-semibold text-body-md shadow-sm transition-all active:scale-98">
+        <span class="material-symbols-outlined text-[20px]">person_add</span><span>Add user</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- TABLE -->
+  <div class="bg-surface-container-lowest rounded-xl border border-outline-variant/60 shadow-sm overflow-hidden flex flex-col">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="bg-surface border-b border-outline-variant/50 text-label-sm text-outline uppercase tracking-wider">
+            <th class="py-3.5 px-4">Name &amp; Identity</th>
+            <th class="py-3.5 px-4">Role</th>
+            <th class="py-3.5 px-4">Scope</th>
+            <th class="py-3.5 px-4">Key Escrow Delegation</th>
+            <th class="py-3.5 px-4">Status</th>
+            <th class="py-3.5 px-4">Authentication / MFA</th>
+            <th class="py-3.5 pr-6 pl-4 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="rows" class="divide-y divide-outline-variant/30 text-body-md"></tbody>
+      </table>
+    </div>
+    <div class="px-6 py-3.5 bg-surface border-t border-outline-variant/40 flex items-center justify-between text-body-sm text-outline">
+      <div id="footer-count">—</div>
+      <div class="flex items-center gap-2">
+        <button class="p-1 rounded text-outline-variant cursor-not-allowed" disabled><span class="material-symbols-outlined text-[18px]">chevron_left</span></button>
+        <span class="px-2.5 py-0.5 rounded bg-surface-container font-semibold text-primary">1</span>
+        <button class="p-1 rounded text-outline-variant cursor-not-allowed" disabled><span class="material-symbols-outlined text-[18px]">chevron_right</span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- COMPLIANCE BANNER -->
+  <div class="bg-surface-container-low border border-surface-container-high rounded-xl p-4 flex items-start gap-3.5">
+    <span class="material-symbols-outlined text-primary text-[22px] mt-0.5 shrink-0">info</span>
+    <div class="flex-1">
+      <h4 class="text-label-md font-semibold text-on-surface">Compliance &amp; Key Escrow Security Protocol</h4>
+      <p class="text-body-sm text-outline mt-0.5 leading-relaxed">Modifications to administrator scopes or operator key escrows are written to the tamper-evident audit log. Recovery PIN delegates are scoped to their assigned site. Password resets never alter a user's MFA enrolment.</p>
+    </div>
+  </div>
+</main>
+
+<!-- ADD USER MODAL -->
+<div id="add-modal" class="hidden fixed inset-0 z-30 flex items-start justify-center p-4 overflow-y-auto" style="background:rgba(15,23,42,0.4)">
+  <div class="bg-surface-container-lowest rounded-xl shadow-xl w-full max-w-lg mt-10 border border-outline-variant">
+    <div class="flex items-center justify-between px-5 py-3.5 border-b border-outline-variant/50">
+      <h3 class="text-headline-md text-on-surface flex items-center gap-2"><span class="material-symbols-outlined text-[20px] text-primary">person_add</span>Add user</h3>
+      <button class="add-close text-outline hover:text-on-surface"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div id="add-form" class="p-5 flex flex-col gap-3">
+      <div class="grid grid-cols-12 gap-3">
+        <div class="col-span-5"><label class="text-label-md text-on-surface-variant">First name</label><input id="a-first" class="mt-1 w-full px-3 py-2 bg-surface rounded-lg border border-outline-variant text-body-md focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"></div>
+        <div class="col-span-5"><label class="text-label-md text-on-surface-variant">Last name</label><input id="a-last" class="mt-1 w-full px-3 py-2 bg-surface rounded-lg border border-outline-variant text-body-md focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"></div>
+        <div class="col-span-2"><label class="text-label-md text-on-surface-variant">M.I.</label><input id="a-mi" maxlength="1" class="mt-1 w-full px-3 py-2 bg-surface rounded-lg border border-outline-variant text-body-md text-center focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"></div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="text-label-md text-on-surface-variant">Job title</label><input id="a-title" class="mt-1 w-full px-3 py-2 bg-surface rounded-lg border border-outline-variant text-body-md focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"></div>
+        <div><label class="text-label-md text-on-surface-variant">Username</label><input id="a-name" autocomplete="off" class="mt-1 w-full px-3 py-2 bg-surface rounded-lg border border-outline-variant text-body-md focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"></div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="text-label-md text-on-surface-variant">Role</label>
+          <select id="a-role" class="mt-1 w-full px-3 py-2 bg-surface rounded-lg border border-outline-variant text-body-md focus:outline-none focus:border-primary">
+            <option value="operator">Operator</option><option value="admin">Admin</option><option value="auditor">Auditor</option>
+          </select>
+        </div>
+        <div><label class="text-label-md text-on-surface-variant">Scope / site</label>
+          <select id="a-scope" class="mt-1 w-full px-3 py-2 bg-surface rounded-lg border border-outline-variant text-body-md focus:outline-none focus:border-primary"></select>
+        </div>
+      </div>
+      <div><label class="text-label-md text-on-surface-variant">Initial password</label>
+        <div class="mt-1 flex">
+          <input id="a-pass" type="password" autocomplete="new-password" class="flex-1 px-3 py-2 bg-surface rounded-l-lg border border-outline-variant border-r-0 text-body-md focus:outline-none focus:border-primary">
+          <button type="button" id="a-pass-toggle" class="px-3 rounded-r-lg border border-outline-variant bg-surface-container text-outline hover:text-on-surface"><span class="material-symbols-outlined text-[18px]">visibility</span></button>
+        </div>
+        <p class="text-body-sm text-outline mt-1">Stored only as an Argon2 hash. Share it with the user over a secure channel.</p>
+      </div>
+      <div class="flex items-center gap-3 pt-1">
+        <button id="a-save" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-on-primary font-semibold text-body-md hover:bg-surface-tint">Create user</button>
+        <span id="a-err" class="text-body-sm text-error"></span>
+      </div>
+    </div>
+    <div id="add-mfa" class="hidden p-5 flex-col gap-3">
+      <div class="flex items-center gap-2 text-secondary"><span class="material-symbols-outlined">check_circle</span><span class="font-semibold">User created — enrol MFA</span></div>
+      <p class="text-body-sm text-outline">Have the user scan this with their authenticator app, or enter the key manually. This is shown only once.</p>
+      <div class="flex items-center gap-4">
+        <div id="mfa-qr" class="p-2 bg-white rounded-lg border border-outline-variant"></div>
+        <div class="flex flex-col gap-1">
+          <span class="text-label-md text-on-surface-variant">Secret key</span>
+          <code id="mfa-secret" class="font-code-sm text-code-sm bg-surface-container px-2 py-1 rounded select-all break-all"></code>
+        </div>
+      </div>
+      <button class="add-close mt-1 inline-flex items-center justify-center px-4 py-2 rounded-lg bg-primary text-on-primary font-semibold text-body-md hover:bg-surface-tint w-max">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- RESET PASSWORD MODAL -->
+<div id="pw-modal" class="hidden fixed inset-0 z-30 flex items-start justify-center p-4" style="background:rgba(15,23,42,0.4)">
+  <div class="bg-surface-container-lowest rounded-xl shadow-xl w-full max-w-md mt-16 border border-outline-variant">
+    <div class="flex items-center justify-between px-5 py-3.5 border-b border-outline-variant/50">
+      <h3 class="text-headline-md text-on-surface flex items-center gap-2"><span class="material-symbols-outlined text-[20px] text-primary">key</span>Reset password</h3>
+      <button class="pw-close text-outline hover:text-on-surface"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div class="p-5 flex flex-col gap-3">
+      <p class="text-body-sm text-outline">Set a new password for <b id="pw-user" class="text-on-surface"></b>. MFA enrolment is not changed. Share it over a secure channel.</p>
+      <div class="flex">
+        <input id="pw-pass" type="password" autocomplete="new-password" placeholder="new password" class="flex-1 px-3 py-2 bg-surface rounded-l-lg border border-outline-variant border-r-0 text-body-md focus:outline-none focus:border-primary">
+        <button type="button" id="pw-toggle" class="px-3 rounded-r-lg border border-outline-variant bg-surface-container text-outline hover:text-on-surface"><span class="material-symbols-outlined text-[18px]">visibility</span></button>
+      </div>
+      <div class="flex items-center gap-3">
+        <button id="pw-save" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-on-primary font-semibold text-body-md hover:bg-surface-tint">Set new password</button>
+        <span id="pw-err" class="text-body-sm text-error"></span>
+        <span id="pw-ok" class="text-body-sm text-secondary"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const TOKEN = sessionStorage.getItem("blm_token");
+if (!TOKEN) location.replace("/ui/");
+const esc = s => (s==null?"":String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function claims(){ try { const p = TOKEN.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'); return JSON.parse(decodeURIComponent(escape(atob(p)))); } catch(e){ return {}; } }
+async function api(path, opts={}){
+  const r = await fetch(path, {...opts, headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN, ...(opts.headers||{})}});
+  if (r.status === 401){ sessionStorage.removeItem("blm_token"); location.replace("/ui/"); return new Promise(()=>{}); }
+  const b = await r.json().catch(()=>({}));
+  if (!r.ok) throw new Error(b.detail || ("HTTP "+r.status));
+  return b;
+}
+const show = id => document.getElementById(id);
+const ME = claims();
+const isSuper = ME.role === "super_admin";
+
+// profile badge
+function userInitials(u){
+  if (u.first_name && u.last_name) return (u.first_name[0]+u.last_name[0]).toUpperCase();
+  const segs = (u.username||"?").split(/[^A-Za-z0-9]+/).filter(Boolean);
+  return (segs.slice(0,2).map(s=>s[0]).join("") || (u.username||"?").slice(0,1)).toUpperCase();
+}
+show("whoami").textContent = ME.role + (ME.scope ? " · "+ME.scope : "");
+show("avatar-top").textContent = userInitials({username: ME.sub, first_name:null, last_name:null});
+
+// profile dropdown
+show("profile-btn").onclick = e => { e.stopPropagation(); show("profile-menu").classList.toggle("hidden"); };
+document.addEventListener("click", () => { show("profile-menu").classList.add("hidden"); closeMenus(); });
+show("signout").onclick = () => { sessionStorage.removeItem("blm_token"); location.replace("/ui/"); };
+
+const ROLE_ICON = {super_admin:"admin_panel_settings", admin:"shield", operator:"badge", auditor:"visibility"};
+const ESCROW = {
+  super_admin:{i:"encrypted", t:"Policy & TPM Config"},
+  admin:{i:"vpn_key", t:"BitLocker Escrow Master"},
+  operator:{i:"key", t:"Recovery PIN Delegate"},
+  auditor:{i:"fact_check", t:"Read-only Audit"}
+};
+function displayName(u){ return (u.display_name && u.display_name.trim()) ? u.display_name : u.username; }
+
+let ALL = [], roleFilter = "all", statusMode = "active", q = "";
+
+async function load(){ ALL = await api("/operators"); draw(); }
+
+function draw(){
+  const bySearch = u => {
+    if (!q) return true;
+    const hay = [displayName(u), u.username, u.role, u.scope||""].join(" ").toLowerCase();
+    return hay.includes(q.toLowerCase());
+  };
+  const byStatus = u => statusMode === "all" ? true : u.status === statusMode;
+  const byRole = u => roleFilter === "all" ? true : u.role === roleFilter;
+  const rows = ALL.filter(byStatus).filter(byRole).filter(bySearch);
+
+  // pills (roles present, from the status-filtered set)
+  const base = ALL.filter(byStatus);
+  const roles = [...new Set(base.map(u=>u.role))].sort();
+  const pill = (key, label, n, active) =>
+    `<button data-role="${key}" class="role-pill px-3 py-1 rounded ${active?'bg-surface-container-lowest font-semibold text-primary shadow-sm':'text-on-surface-variant hover:text-on-surface'} transition-colors">${esc(label)} (${n})</button>`;
+  let pills = pill("all","All Users", base.length, roleFilter==="all");
+  roles.forEach(rk => pills += pill(rk, rk, base.filter(u=>u.role===rk).length, roleFilter===rk));
+  show("role-pills").innerHTML = pills;
+  show("role-pills").querySelectorAll(".role-pill").forEach(b => b.onclick = () => { roleFilter = b.dataset.role; draw(); });
+
+  // header + footer counts
+  const activeCount = ALL.filter(u=>u.status==="active").length;
+  show("count-badge").textContent = activeCount + " active user" + (activeCount===1?"":"s") + " configured";
+  show("footer-count").innerHTML = "Showing <span class='font-semibold text-on-surface'>"+rows.length+"</span> of <span class='font-semibold text-on-surface'>"+ALL.length+"</span> users";
+
+  show("rows").innerHTML = rows.map(u => {
+    const nm = displayName(u);
+    const esc_ = ESCROW[u.role] || {i:"help", t:"—"};
+    const scopeCell = u.scope
+      ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-label-sm bg-surface-container text-primary font-medium">${esc(u.scope)}</span>`
+      : `<span class="text-on-surface-variant font-medium">— (Global)</span>`;
+    const statusPill = u.status === "active"
+      ? `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-label-sm font-semibold bg-secondary-container/60 text-secondary border border-secondary-fixed"><span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>active</span>`
+      : `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-label-sm font-semibold bg-error-container text-error border border-error/30"><span class="w-1.5 h-1.5 rounded-full bg-error"></span>inactive</span>`;
+    const actToggle = u.status === "active"
+      ? `<button data-act="deactivate" data-id="${u.id}" class="row-act w-full text-left px-3 py-2 text-body-md text-on-surface hover:bg-surface-container">Deactivate</button>`
+      : `<button data-act="activate" data-id="${u.id}" class="row-act w-full text-left px-3 py-2 text-body-md text-on-surface hover:bg-surface-container">Activate</button>`;
+    const resetItem = isSuper
+      ? `<button data-act="reset" data-id="${u.id}" data-label="${esc(nm)}" class="row-act w-full text-left flex items-center gap-2 px-3 py-2 text-body-md text-on-surface hover:bg-surface-container"><span class="material-symbols-outlined text-[18px] text-outline">key</span>Reset password</button>`
+      : "";
+    return `<tr class="hover:bg-surface transition-colors">
+      <td class="py-4 px-4">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-full bg-surface-container-high text-primary flex items-center justify-center font-semibold text-body-sm ring-1 ring-outline-variant/40">${esc(userInitials(u))}</div>
+          <div><div class="font-semibold text-on-surface">${esc(nm)}</div>
+          <div class="text-body-sm text-outline font-code-sm">@${esc(u.username)}</div></div>
+        </div>
+      </td>
+      <td class="py-4 px-4 whitespace-nowrap"><span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-label-sm font-semibold bg-surface-container text-on-surface"><span class="material-symbols-outlined text-[14px] text-primary">${ROLE_ICON[u.role]||"person"}</span>${esc(u.role)}</span></td>
+      <td class="py-4 px-4 whitespace-nowrap">${scopeCell}</td>
+      <td class="py-4 px-4"><span class="inline-flex items-center gap-1.5 text-body-sm font-medium text-on-surface"><span class="material-symbols-outlined text-[16px] text-tertiary">${esc_.i}</span>${esc_.t}</span></td>
+      <td class="py-4 px-4 whitespace-nowrap">${statusPill}</td>
+      <td class="py-4 px-4 whitespace-nowrap"><div class="flex items-center gap-1.5 text-body-sm text-outline"><span class="material-symbols-outlined text-[16px] text-secondary">fingerprint</span><span>Authenticator (TOTP)</span></div></td>
+      <td class="py-4 pr-6 pl-4 text-right whitespace-nowrap">
+        <div class="relative inline-block text-left">
+          <button class="act-btn inline-flex items-center gap-1 px-3 py-1.5 rounded-md border border-outline-variant bg-surface-container-lowest hover:bg-surface-container text-on-surface text-label-md font-medium"><span>Actions</span><span class="material-symbols-outlined text-[16px] text-outline">arrow_drop_down</span></button>
+          <div class="act-menu hidden absolute right-0 mt-1 w-48 bg-surface-container-lowest rounded-lg border border-outline-variant shadow-lg py-1 z-10">
+            ${actToggle}${resetItem}
+            <div class="my-1 border-t border-outline-variant/40"></div>
+            <button data-act="delete" data-id="${u.id}" data-label="${esc(u.username)}" class="row-act w-full text-left px-3 py-2 text-body-md text-error hover:bg-surface-container">Delete</button>
+          </div>
+        </div>
+      </td></tr>`;
+  }).join("") || `<tr><td colspan="7" class="py-10 text-center text-outline">No users match.</td></tr>`;
+
+  // wire per-row controls
+  show("rows").querySelectorAll(".act-btn").forEach(b => b.onclick = e => {
+    e.stopPropagation(); const m = b.nextElementSibling; const open = !m.classList.contains("hidden");
+    closeMenus(); if (!open) m.classList.remove("hidden");
+  });
+  show("rows").querySelectorAll(".row-act").forEach(b => b.onclick = () => rowAction(b.dataset));
+}
+function closeMenus(){ document.querySelectorAll(".act-menu").forEach(m => m.classList.add("hidden")); }
+
+async function rowAction(d){
+  closeMenus();
+  try {
+    if (d.act === "reset") return openReset(d.id, d.label);
+    if (d.act === "delete"){ if (!confirm("Permanently delete "+d.label+"? Audit history is kept.")) return; await api("/operators/"+d.id, {method:"DELETE"}); }
+    else await api("/operators/"+d.id+"/"+d.act, {method:"POST"});
+    await load();
+  } catch(e){ alert(e.message); }
+}
+
+// filters
+show("search").oninput = e => { q = e.target.value; draw(); };
+show("status-toggle").onclick = () => {
+  statusMode = statusMode === "active" ? "all" : (statusMode === "all" ? "inactive" : "active");
+  show("status-label").textContent = "Status: " + (statusMode==="all" ? "All" : statusMode[0].toUpperCase()+statusMode.slice(1));
+  draw();
+};
+
+// ---- reset password ----
+let pwId = null;
+function openReset(id, label){ pwId = id; show("pw-user").textContent = label; show("pw-pass").value=""; show("pw-pass").type="password"; show("pw-err").textContent=""; show("pw-ok").textContent=""; show("pw-modal").classList.remove("hidden"); }
+document.querySelectorAll(".pw-close").forEach(b => b.onclick = () => show("pw-modal").classList.add("hidden"));
+show("pw-toggle").onclick = () => { const f = show("pw-pass"); f.type = f.type==="password" ? "text" : "password"; };
+show("pw-save").onclick = async () => {
+  const pass = show("pw-pass").value; show("pw-err").textContent=""; show("pw-ok").textContent="";
+  if (!pass.trim()){ show("pw-err").textContent="Enter a new password."; return; }
+  show("pw-save").disabled = true;
+  try { await api("/operators/"+pwId+"/reset-password", {method:"POST", body: JSON.stringify({password: pass})});
+    show("pw-ok").textContent = "Password reset."; show("pw-pass").value="";
+    setTimeout(() => show("pw-modal").classList.add("hidden"), 1000);
+  } catch(e){ show("pw-err").textContent = e.message; } finally { show("pw-save").disabled = false; }
+};
+
+// ---- add user ----
+async function fillScopes(){
+  let sites = [];
+  try { sites = await api("/sites"); } catch(e){}
+  show("a-scope").innerHTML = '<option value="">— all sites —</option>' + sites.map(s => `<option value="${esc(s.name)}">${esc(s.name)}</option>`).join("");
+}
+show("btn-add").onclick = async () => {
+  ["a-first","a-last","a-mi","a-title","a-name","a-pass"].forEach(i => show(i).value = "");
+  show("a-err").textContent = ""; show("a-role").value = "operator";
+  show("add-form").classList.remove("hidden"); show("add-form").classList.add("flex");
+  show("add-mfa").classList.add("hidden"); show("add-mfa").classList.remove("flex");
+  const adminOpt = show("a-role").querySelector('option[value="admin"]'); if (adminOpt) adminOpt.hidden = !isSuper;
+  await fillScopes();
+  show("add-modal").classList.remove("hidden");
+};
+document.querySelectorAll(".add-close").forEach(b => b.onclick = () => show("add-modal").classList.add("hidden"));
+show("a-pass-toggle").onclick = () => { const f = show("a-pass"); f.type = f.type==="password" ? "text" : "password"; };
+show("a-save").onclick = async () => {
+  show("a-err").textContent = ""; show("a-save").disabled = true;
+  try {
+    const r = await api("/operators", {method:"POST", body: JSON.stringify({
+      username: show("a-name").value.trim(), password: show("a-pass").value, role: show("a-role").value,
+      scope: show("a-scope").value || null,
+      first_name: show("a-first").value.trim() || null, last_name: show("a-last").value.trim() || null,
+      middle_initial: show("a-mi").value.trim() || null, job_title: show("a-title").value.trim() || null
+    })});
+    // show MFA enrolment
+    show("add-form").classList.add("hidden"); show("add-form").classList.remove("flex");
+    show("add-mfa").classList.remove("hidden"); show("add-mfa").classList.add("flex");
+    show("mfa-secret").textContent = r.mfa_secret || "";
+    const qr = qrcode(0, "M"); qr.addData(r.mfa_uri || ""); qr.make();
+    show("mfa-qr").innerHTML = qr.createImgTag(4, 0);
+    await load();
+  } catch(e){ show("a-err").textContent = e.message; } finally { show("a-save").disabled = false; }
+};
+
+load();
+</script>
+</body>
+</html>
