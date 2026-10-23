@@ -225,6 +225,10 @@ class OperatorCreate(BaseModel):
     job_title: str | None = None
 
 
+class OperatorResetPassword(BaseModel):
+    password: str
+
+
 class OperatorUpdate(BaseModel):
     role: str | None = None
     scope: str | None = None

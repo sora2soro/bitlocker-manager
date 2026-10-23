@@ -485,3 +485,40 @@ def test_import_native_txt_row_has_no_hostname(app_client):
     r = app_client.post("/import/commit", headers=auth(admin), json=[row])
     assert r.status_code == 200, r.text
     assert r.json()["created"] == 1, r.text
+
+
+# ---- password reset (super admin only) ----
+def _op_id(client, tok, username):
+    users = client.get("/operators", headers=auth(tok)).json()
+    return next(u["id"] for u in users if u["username"] == username)
+
+
+def test_super_admin_can_reset_password(app_client):
+    boss = token_for(app_client, "boss", "pw-boss")
+    cid = _op_id(app_client, boss, "cris")
+    r = app_client.post(f"/operators/{cid}/reset-password", headers=auth(boss),
+                        json={"password": "new-cris-pw"})
+    assert r.status_code == 200, r.text
+    # old password no longer reaches the MFA stage
+    old = app_client.post("/auth/login", json={"username": "cris", "password": "pw-cris"})
+    assert not (old.status_code == 200 and old.json().get("mfa_token"))
+    # new password does
+    new = app_client.post("/auth/login", json={"username": "cris", "password": "new-cris-pw"})
+    assert new.status_code == 200 and new.json().get("mfa_token"), new.text
+
+
+def test_reset_password_requires_super_admin(app_client):
+    boss = token_for(app_client, "boss", "pw-boss")
+    cid = _op_id(app_client, boss, "cris")
+    admin = token_for(app_client, "admin", "pw-admin")
+    r = app_client.post(f"/operators/{cid}/reset-password", headers=auth(admin),
+                        json={"password": "nope"})
+    assert r.status_code == 403, r.text
+
+
+def test_reset_password_rejects_blank(app_client):
+    boss = token_for(app_client, "boss", "pw-boss")
+    cid = _op_id(app_client, boss, "cris")
+    r = app_client.post(f"/operators/{cid}/reset-password", headers=auth(boss),
+                        json={"password": "   "})
+    assert r.status_code == 400, r.text

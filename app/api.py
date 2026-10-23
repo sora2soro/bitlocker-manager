@@ -59,6 +59,7 @@ from .schemas import (
     OperatorCreate,
     OperatorCreateResp,
     OperatorOut,
+    OperatorResetPassword,
     OperatorUpdate,
     ProvisionReq,
     ProvisionResp,
@@ -534,6 +535,21 @@ def create_app(*, engine=None, kek=None, settings=None) -> FastAPI:
             op.middle_initial = mi or None
         append_audit(session, action="user_updated", operator_id=actor.id,
                      detail=f"user={op.username} role={op.role}")
+        return _op_out(op)
+
+    @app.post("/operators/{op_id}/reset-password", response_model=OperatorOut)
+    def reset_operator_password(op_id: str, body: OperatorResetPassword,
+                                session=Depends(get_session),
+                                actor: Operator = Depends(require_role("super_admin"))):
+        op = session.get(Operator, op_id)
+        if op is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "user not found")
+        if not (body.password or "").strip():
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "new password required")
+        # Resets the password only; MFA enrolment is untouched.
+        op.password_hash = hash_password(body.password)
+        append_audit(session, action="user_password_reset", operator_id=actor.id,
+                     detail=f"user={op.username}")
         return _op_out(op)
 
     @app.post("/operators/{op_id}/activate", response_model=OperatorOut)
