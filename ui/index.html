@@ -492,7 +492,7 @@ show("menu-signout").onclick = (e) => { e.preventDefault(); sessionStorage.remov
 show("logout").onclick = () => { sessionStorage.removeItem("blm_token"); location.reload(); };
 
 // ---- settings / users ----
-show("menu-settings").onclick = (e) => { e.preventDefault(); openUsers(); };
+show("menu-settings").onclick = (e) => { e.preventDefault(); location.href = "users.html"; };
 show("menu-dl-helper").onclick = (e) => { e.preventDefault(); downloadHelper(); };
 show("users-back").onclick = () => { show("view-users").classList.add("app-hidden"); show("view-app").classList.remove("app-hidden"); };
 function openUsers() {
