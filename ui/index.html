@@ -283,6 +283,26 @@
   </div>
 </div></div></div>
 
+<!-- Reset password modal (super admin) -->
+<div class="modal fade" id="pwModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content">
+  <div class="modal-header"><h5 class="modal-title"><i class="fas fa-key mr-2"></i>Reset password</h5>
+    <button class="close" data-dismiss="modal">&times;</button></div>
+  <div class="modal-body">
+    <p class="small text-muted mb-2">Set a new password for <b id="pw-user"></b>. MFA enrolment is not changed. Share it over a secure channel; the user can change it after signing in.</p>
+    <div class="form-group">
+      <div class="input-group">
+        <input id="pw-pass" type="password" class="form-control" placeholder="new password" autocomplete="new-password">
+        <div class="input-group-append">
+          <button class="btn btn-outline-secondary" type="button" id="pw-toggle" title="Show / hide"><i class="fas fa-eye"></i></button>
+        </div>
+      </div>
+    </div>
+    <button id="pw-save" class="btn btn-primary">Set new password</button>
+    <div id="pw-err" class="text-danger small mt-2"></div>
+    <div id="pw-ok" class="text-success small mt-2"></div>
+  </div>
+</div></div></div>
+
 <!-- MFA enrolment (shown once after create) -->
 <div class="modal fade" id="mfaModal" tabindex="-1" data-backdrop="static"><div class="modal-dialog"><div class="modal-content">
   <div class="modal-header bg-success text-white"><h5 class="modal-title">User created — set up their MFA</h5></div>
@@ -485,10 +505,14 @@ async function loadUsers() {
   const activeSupers = users.filter(u => u.role === "super_admin" && u.status === "active").length;
   show("super-warning").classList.toggle("app-hidden", activeSupers !== 1);
   const badge = (s) => s === "active" ? '<span class="badge badge-success">active</span>' : '<span class="badge badge-secondary">inactive</span>';
+  const canReset = claims().role === "super_admin";
   show("user-rows").innerHTML = users.map(u => {
     const act = u.status === "active"
       ? `<a class="dropdown-item" href="#" onclick="userAction('${u.id}','deactivate');return false;">Deactivate</a>`
       : `<a class="dropdown-item" href="#" onclick="userAction('${u.id}','activate');return false;">Activate</a>`;
+    const resetItem = canReset
+      ? `<a class="dropdown-item" href="#" onclick="openResetPw('${u.id}','${esc(u.display_name || u.username)}');return false;"><i class="fas fa-key mr-2"></i>Reset password</a>`
+      : "";
     return `<tr>
       <td class="font-weight-bold">${esc(u.username)}</td>
       <td>${esc(u.display_name) || '<span class="text-muted">—</span>'}</td>
@@ -500,6 +524,7 @@ async function loadUsers() {
           <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-toggle="dropdown">Actions</button>
           <div class="dropdown-menu dropdown-menu-right">
             ${act}
+            ${resetItem}
             <div class="dropdown-divider"></div>
             <a class="dropdown-item text-danger" href="#" onclick="userAction('${u.id}','delete','${esc(u.username)}');return false;">Delete</a>
           </div>
@@ -551,6 +576,37 @@ show("u-pass-toggle").onclick = () => {
   const on = field.type === "password";
   field.type = on ? "text" : "password";
   show("u-pass-toggle").innerHTML = `<i class="fas fa-eye${on?"-slash":""}"></i>`;
+};
+
+// ---- reset password (super admin) ----
+let pwContext = null;   // { id }
+function openResetPw(id, label) {
+  pwContext = { id };
+  show("pw-user").textContent = label;
+  show("pw-pass").value = ""; show("pw-pass").type = "password";
+  show("pw-err").textContent = ""; show("pw-ok").textContent = "";
+  show("pw-toggle").innerHTML = `<i class="fas fa-eye"></i>`;
+  $('#pwModal').modal('show');
+}
+show("pw-toggle").onclick = () => {
+  const field = show("pw-pass");
+  const on = field.type === "password";
+  field.type = on ? "text" : "password";
+  show("pw-toggle").innerHTML = `<i class="fas fa-eye${on?"-slash":""}"></i>`;
+};
+show("pw-save").onclick = async () => {
+  if (!pwContext) return;
+  const pass = show("pw-pass").value;
+  show("pw-err").textContent = ""; show("pw-ok").textContent = "";
+  if (!pass.trim()) { show("pw-err").textContent = "Enter a new password."; return; }
+  show("pw-save").disabled = true;
+  try {
+    await api(`/operators/${pwContext.id}/reset-password`, { method:"POST", body: JSON.stringify({ password: pass }) });
+    show("pw-ok").textContent = "Password reset. Share it with the user securely.";
+    show("pw-pass").value = "";
+    setTimeout(() => $('#pwModal').modal('hide'), 1200);
+  } catch (e) { show("pw-err").textContent = e.message; }
+  finally { show("pw-save").disabled = false; }
 };
 
 // ---- tabs ----
