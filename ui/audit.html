@@ -77,7 +77,14 @@
         <tbody id="rows" class="divide-y divide-outline-variant/30 text-body-md"></tbody>
       </table>
     </div>
-    <div class="px-6 py-3.5 bg-surface border-t border-outline-variant/40 text-body-sm text-outline"><span id="footer-count">—</span></div>
+    <div class="px-6 py-3.5 bg-surface border-t border-outline-variant/40 flex items-center justify-between text-body-sm text-outline">
+      <span id="footer-count">—</span>
+      <div class="flex items-center gap-2">
+        <button id="a-prev" class="p-1 rounded text-outline hover:text-on-surface disabled:text-outline-variant disabled:cursor-not-allowed" disabled><span class="material-symbols-outlined text-[18px]">chevron_left</span></button>
+        <span id="a-page" class="px-2.5 py-0.5 rounded bg-surface-container font-semibold text-primary">1</span>
+        <button id="a-next" class="p-1 rounded text-outline hover:text-on-surface disabled:text-outline-variant disabled:cursor-not-allowed" disabled><span class="material-symbols-outlined text-[18px]">chevron_right</span></button>
+      </div>
+    </div>
   </div>
 </main>
 
@@ -104,7 +111,9 @@ show("profile-btn").onclick = e => { e.stopPropagation(); show("profile-menu").c
 document.addEventListener("click", () => show("profile-menu").classList.add("hidden"));
 show("signout").onclick = () => { sessionStorage.removeItem("blm_token"); location.replace("/ui/login.html"); };
 
-let ALL = [], q = "", highOnly = false;
+let ALL = [], q = "", highOnly = false, page = 0;
+// show only as many rows as fit the viewport, so the page doesn't scroll
+const PSIZE = Math.max(8, Math.floor((window.innerHeight - 390) / 48));
 async function load(){
   let r;
   try { r = await api("/audit"); }
@@ -124,17 +133,25 @@ function draw(){
   const sevPill = s => s === "high"
     ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-label-sm font-semibold bg-error-container text-on-error-container">high</span>`
     : `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-label-sm font-medium bg-surface-container text-on-surface-variant">${esc(s)}</span>`;
-  show("rows").innerHTML = rows.map(e => `<tr class="${e.severity==='high'?'bg-error-container/20':''} hover:bg-surface transition-colors">
+  const start = page * PSIZE, pageRows = rows.slice(start, start + PSIZE);
+  show("rows").innerHTML = pageRows.map(e => `<tr class="${e.severity==='high'?'bg-error-container/20':''} hover:bg-surface transition-colors">
     <td class="py-3 px-4 pl-6 font-code-sm text-code-sm text-on-surface-variant">${e.seq}</td>
     <td class="py-3 px-4 font-medium text-on-surface">${esc(e.action)}</td>
     <td class="py-3 px-4">${sevPill(e.severity)}</td>
     <td class="py-3 pr-6 px-4 text-body-sm text-outline">${esc(e.detail)||''}</td>
   </tr>`).join("") || `<tr><td colspan="4" class="py-10 text-center text-outline">No entries match.</td></tr>`;
-  show("footer-count").innerHTML = `Showing <span class="font-semibold text-on-surface">${rows.length}</span> of ${ALL.length} entries`;
+  show("a-prev").disabled = page === 0;
+  show("a-next").disabled = start + PSIZE >= rows.length;
+  show("a-page").textContent = page + 1;
+  show("footer-count").innerHTML = rows.length
+    ? `Showing <span class="font-semibold text-on-surface">${start+1}–${Math.min(start+PSIZE, rows.length)}</span> of ${rows.length}${ALL.length!==rows.length?` (filtered from ${ALL.length})`:""} entries`
+    : "No entries match";
 }
 let st = null;
-show("search").oninput = e => { q = e.target.value; clearTimeout(st); st = setTimeout(draw, 150); };
-show("high-only").onchange = e => { highOnly = e.target.checked; draw(); };
+show("search").oninput = e => { q = e.target.value; page = 0; clearTimeout(st); st = setTimeout(draw, 150); };
+show("high-only").onchange = e => { highOnly = e.target.checked; page = 0; draw(); };
+show("a-prev").onclick = () => { if (page > 0){ page--; draw(); } };
+show("a-next").onclick = () => { page++; draw(); };
 load();
 </script>
 </body>

@@ -269,7 +269,10 @@ document.addEventListener("click", () => show("export-menu").classList.add("hidd
 show("menu-helper").onclick = () => downloadHelper(null);
 
 // ---- devices list ----
-let q = "", page = 0, DEV = []; const SIZE = 25;
+let q = "", page = 0, DEV = [];
+// fit the page to the viewport so the table doesn't push the page into a scroll
+// (row ~68px; ~480px of fixed chrome: header, sub-header, workbench, footer, banner)
+const SIZE = Math.max(4, Math.floor((window.innerHeight - 480) / 68));
 async function load(){
   const off = page * SIZE;
   let rows = [];
