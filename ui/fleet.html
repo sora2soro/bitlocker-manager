@@ -63,7 +63,18 @@
     </div>
     <div class="flex items-center gap-2">
       <button id="btn-dq" class="hidden inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest hover:bg-surface-container text-body-md text-on-surface transition-colors"><span class="material-symbols-outlined text-[18px] text-tertiary">cleaning_services</span><span>Data quality</span></button>
-      <button id="btn-export" class="hidden inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest hover:bg-surface-container text-body-md text-on-surface transition-colors"><span class="material-symbols-outlined text-[18px]">download</span><span>Export</span></button>
+      <div id="export-wrap" class="relative hidden">
+        <button id="btn-export" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest hover:bg-surface-container text-body-md text-on-surface transition-colors"><span class="material-symbols-outlined text-[18px]">download</span><span>Export</span><span class="material-symbols-outlined text-[16px] text-outline">arrow_drop_down</span></button>
+        <div id="export-menu" class="hidden absolute right-0 mt-1 w-52 bg-surface-container-lowest rounded-lg border border-outline-variant shadow-lg py-1 z-20">
+          <div class="px-3 py-1 text-label-sm text-outline uppercase tracking-wider">Inventory (no keys)</div>
+          <button data-x="inventory" data-f="csv" class="exp-item w-full text-left px-3 py-1.5 text-body-md text-on-surface hover:bg-surface-container">Inventory · CSV</button>
+          <button data-x="inventory" data-f="xlsx" class="exp-item w-full text-left px-3 py-1.5 text-body-md text-on-surface hover:bg-surface-container">Inventory · Excel</button>
+          <div class="my-1 border-t border-outline-variant/40"></div>
+          <div class="px-3 py-1 text-label-sm text-outline uppercase tracking-wider">Audit report</div>
+          <button data-x="audit" data-f="csv" class="exp-item w-full text-left px-3 py-1.5 text-body-md text-on-surface hover:bg-surface-container">Audit log · CSV</button>
+          <button data-x="audit" data-f="xlsx" class="exp-item w-full text-left px-3 py-1.5 text-body-md text-on-surface hover:bg-surface-container">Audit log · Excel</button>
+        </div>
+      </div>
       <button id="btn-import" class="hidden inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest hover:bg-surface-container text-body-md text-on-surface transition-colors"><span class="material-symbols-outlined text-[18px] text-primary">file_upload</span><span>Import</span></button>
       <button id="btn-add" class="hidden inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-on-secondary hover:bg-on-secondary-container font-semibold text-body-md shadow-sm transition-all active:scale-98"><span class="material-symbols-outlined text-[20px]">add</span><span>Add device</span></button>
     </div>
@@ -135,6 +146,81 @@
   </div>
 </div>
 
+<!-- ADD / EDIT DEVICE MODAL -->
+<div id="dev-modal" class="hidden fixed inset-0 z-30 flex items-start justify-center p-4 overflow-y-auto" style="background:rgba(15,23,42,0.4)">
+  <div class="bg-surface-container-lowest rounded-xl shadow-xl w-full max-w-lg mt-10 border border-outline-variant">
+    <div class="flex items-center justify-between px-5 py-3.5 border-b border-outline-variant/50">
+      <h3 id="dev-title" class="text-headline-md text-on-surface">Add device</h3>
+      <button class="dev-close text-outline hover:text-on-surface"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div class="p-5 flex flex-col gap-3">
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="text-label-md text-on-surface-variant">Hostname</label><input id="d-host" class="mt-1 w-full px-3 py-2 bg-surface rounded-lg border border-outline-variant text-body-md focus:outline-none focus:border-primary"></div>
+        <div><label class="text-label-md text-on-surface-variant">Site</label><select id="d-site" class="mt-1 w-full px-3 py-2 bg-surface rounded-lg border border-outline-variant text-body-md focus:outline-none focus:border-primary"></select></div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="text-label-md text-on-surface-variant">Department</label><input id="d-dept" class="mt-1 w-full px-3 py-2 bg-surface rounded-lg border border-outline-variant text-body-md focus:outline-none focus:border-primary"></div>
+        <div><label class="text-label-md text-on-surface-variant">Serial</label><input id="d-serial" class="mt-1 w-full px-3 py-2 bg-surface rounded-lg border border-outline-variant text-body-md focus:outline-none focus:border-primary"></div>
+      </div>
+      <div id="d-key-block" class="flex flex-col gap-3">
+        <div><label class="text-label-md text-on-surface-variant">Recovery Key ID <span class="text-outline">(8-4-4-4-12)</span></label><input id="d-keyid" class="mt-1 w-full px-3 py-2 bg-surface rounded-lg border border-outline-variant text-code-sm font-code-sm focus:outline-none focus:border-primary" placeholder="0A8DC46F-385F-40CA-880C-A756000BA5CF"></div>
+        <div><label class="text-label-md text-on-surface-variant">Recovery Key <span class="text-outline">(8 groups of 6 digits)</span></label><input id="d-key" class="mt-1 w-full px-3 py-2 bg-surface rounded-lg border border-outline-variant text-code-sm font-code-sm focus:outline-none focus:border-primary" placeholder="000000-000000-000000-000000-000000-000000-000000-000000"></div>
+        <p class="text-body-sm text-outline">The key is encrypted at rest and never shown back. Paste it in any format — separators are optional.</p>
+      </div>
+      <div class="flex items-center gap-3 pt-1">
+        <button id="d-save" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-on-primary font-semibold hover:bg-surface-tint">Save</button>
+        <span id="d-err" class="text-body-sm text-error"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DATA QUALITY MODAL -->
+<div id="dq-modal" class="hidden fixed inset-0 z-30 flex items-start justify-center p-4 overflow-y-auto" style="background:rgba(15,23,42,0.4)">
+  <div class="bg-surface-container-lowest rounded-xl shadow-xl w-full max-w-3xl mt-10 border border-outline-variant">
+    <div class="flex items-center justify-between px-5 py-3.5 border-b border-outline-variant/50">
+      <h3 class="text-headline-md text-on-surface flex items-center gap-2"><span class="material-symbols-outlined text-[20px] text-tertiary">cleaning_services</span>Data quality — records needing enrichment</h3>
+      <button class="dq-close text-outline hover:text-on-surface"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div class="p-5">
+      <div id="dq-summary" class="flex flex-wrap gap-2 mb-3"></div>
+      <div class="overflow-x-auto max-h-[55vh] rounded-lg border border-outline-variant/50">
+        <table class="w-full text-left"><thead><tr class="bg-surface text-label-sm text-outline uppercase tracking-wider"><th class="py-2.5 px-4">Hostname</th><th class="py-2.5 px-4">Site</th><th class="py-2.5 px-4">Serial</th><th class="py-2.5 px-4">Recovery Key ID</th><th class="py-2.5 px-4">Missing</th></tr></thead><tbody id="dq-rows" class="divide-y divide-outline-variant/30 text-body-md"></tbody></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- IMPORT MODAL -->
+<div id="imp-modal" class="hidden fixed inset-0 z-30 flex items-start justify-center p-4 overflow-y-auto" style="background:rgba(15,23,42,0.4)">
+  <div class="bg-surface-container-lowest rounded-xl shadow-xl w-full max-w-2xl mt-10 border border-outline-variant">
+    <div class="flex items-center justify-between px-5 py-3.5 border-b border-outline-variant/50">
+      <h3 class="text-headline-md text-on-surface flex items-center gap-2"><span class="material-symbols-outlined text-[20px] text-primary">file_upload</span>Import devices</h3>
+      <button class="imp-close text-outline hover:text-on-surface"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div class="p-5 flex flex-col gap-3">
+      <div class="p-3 rounded-lg bg-primary-fixed/40 text-on-primary-fixed-variant text-body-sm">Bulk-add devices with their recovery keys. After a successful import, delete the source files/sheet — a plaintext copy defeats the vault.</div>
+      <div class="inline-flex p-1 bg-surface-container rounded-lg border border-outline-variant/30 text-label-md w-max">
+        <button id="imp-tab-txt" class="imp-tab px-3 py-1 rounded bg-surface-container-lowest font-semibold text-primary shadow-sm">BitLocker .txt files</button>
+        <button id="imp-tab-csv" class="imp-tab px-3 py-1 rounded text-on-surface-variant hover:text-on-surface">CSV spreadsheet</button>
+      </div>
+      <div id="imp-pane-txt">
+        <input id="imp-txt" type="file" accept=".txt" multiple class="block w-full text-body-md text-on-surface file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border file:border-outline-variant file:bg-surface-container file:text-on-surface file:cursor-pointer">
+        <p class="text-body-sm text-outline mt-1">Native Windows <code class="font-code-sm">BitLocker_Recovery_Key_*.txt</code> files. Hostname/Site/Serial import blank when the file only has the Identifier, and get flagged for enrichment.</p>
+      </div>
+      <div id="imp-pane-csv" class="hidden">
+        <input id="imp-csv" type="file" accept=".csv" class="block w-full text-body-md text-on-surface file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border file:border-outline-variant file:bg-surface-container file:text-on-surface file:cursor-pointer">
+        <p class="text-body-sm text-outline mt-1">Recognised columns: <b>Hostname · Site · Identifier · Recovery Key</b> (plus optional Serial). Other columns are ignored.</p>
+      </div>
+      <div id="imp-preview" class="text-body-sm"></div>
+      <div id="imp-errors" class="text-body-sm text-tertiary"></div>
+      <div class="flex items-center gap-3">
+        <button id="imp-commit" disabled class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-on-secondary font-semibold hover:bg-on-secondary-container disabled:opacity-50 disabled:cursor-not-allowed"><span class="material-symbols-outlined text-[18px]">check</span>Import <span id="imp-count"></span></button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- toast -->
 <div id="toast" class="hidden fixed bottom-5 left-1/2 -translate-x-1/2 z-40 px-4 py-2.5 rounded-lg bg-inverse-surface text-inverse-on-surface text-body-md shadow-lg"></div>
 
@@ -147,7 +233,11 @@ async function api(path, opts={}){
   const r = await fetch(path, {...opts, headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN, ...(opts.headers||{})}});
   if (r.status === 401){ sessionStorage.removeItem("blm_token"); location.replace("/ui/login.html"); return new Promise(()=>{}); }
   const b = await r.json().catch(()=>({}));
-  if (!r.ok) throw new Error(b.detail || ("HTTP "+r.status));
+  if (!r.ok){
+    const d = b.detail;
+    const msg = (d && typeof d === "object") ? (d.message || "Request failed") : (d || ("Error "+r.status));
+    const err = new Error(msg); err.detail = d; err.status = r.status; throw err;
+  }
   return b;
 }
 const show = id => document.getElementById(id);
@@ -163,7 +253,7 @@ show("avatar-top").textContent = segInitials(ME.sub);
 show("scope-badge").textContent = ME.scope ? ("Scope · "+ME.scope) : "All sites";
 if (canManage){ show("menu-settings").classList.remove("hidden"); show("nav-settings").classList.remove("hidden"); show("btn-add").classList.remove("hidden"); show("btn-import").classList.remove("hidden"); }
 if (["auditor","admin","super_admin"].includes(ME.role)) show("btn-dq").classList.remove("hidden");
-if (canExport) show("btn-export").classList.remove("hidden");
+if (canExport) show("export-wrap").classList.remove("hidden");
 
 show("profile-btn").onclick = e => { e.stopPropagation(); show("profile-menu").classList.toggle("hidden"); };
 document.addEventListener("click", () => show("profile-menu").classList.add("hidden"));
@@ -172,11 +262,15 @@ show("signout").onclick = () => { sessionStorage.removeItem("blm_token"); locati
 let toastT = null;
 function toast(msg){ const t = show("toast"); t.textContent = msg; t.classList.remove("hidden"); clearTimeout(toastT); toastT = setTimeout(()=>t.classList.add("hidden"), 2200); }
 function soon(){ toast("This flow lands in the next migration step."); }
-["btn-dq","btn-export","btn-import","btn-add"].forEach(id => show(id).onclick = soon);
+show("btn-add").onclick = () => openDevice("add", null);
+show("btn-import").onclick = openImport;
+show("btn-dq").onclick = openDQ;
+show("btn-export").onclick = e => { e.stopPropagation(); show("export-menu").classList.toggle("hidden"); };
+document.addEventListener("click", () => show("export-menu").classList.add("hidden"));
 show("menu-helper").onclick = () => downloadHelper(null);
 
 // ---- devices list ----
-let q = "", page = 0; const SIZE = 25;
+let q = "", page = 0, DEV = []; const SIZE = 25;
 async function load(){
   const off = page * SIZE;
   let rows = [];
@@ -185,6 +279,7 @@ async function load(){
   draw(rows, off);
 }
 function draw(rows, off){
+  DEV = rows;
   show("prev").disabled = page === 0;
   show("next").disabled = rows.length < SIZE;
   show("page-label").textContent = page + 1;
@@ -218,7 +313,8 @@ function draw(rows, off){
     if (act === "unlock") return openUnlock(id, host);
     if (act === "reveal") return openReveal(id, host);
     if (act === "archive") return archiveDevice(id, host);
-    soon();   // edit → next phase
+    if (act === "edit") return openDevice("edit", DEV.find(d => d.id === id));
+    soon();
   });
 }
 // ---- unlock (Pico) ----
@@ -317,6 +413,166 @@ async function downloadHelper(msgEl){
     set(`<span class="text-secondary">Downloaded. Unzip and run install-helper.cmd.</span>`);
   } catch(err){ set(`<span class="text-error">Download failed: ${esc(String(err))}</span>`); }
 }
+
+// ---- add / edit device ----
+let devMode = "add", devId = null;
+document.querySelectorAll(".dev-close").forEach(b => b.onclick = () => show("dev-modal").classList.add("hidden"));
+async function fillSites(sel, selected){
+  if (!window.SITES){ try { window.SITES = await api("/sites"); } catch(e){ window.SITES = []; } }
+  show(sel).innerHTML = ['<option value="">— select site —</option>'].concat(window.SITES.map(s => `<option value="${esc(s.name)}">${esc(s.name)}</option>`)).join("");
+  if (selected) show(sel).value = selected;
+}
+async function openDevice(mode, d){
+  devMode = mode; devId = d ? d.id : null; show("d-err").textContent = "";
+  const kb = show("d-key-block"), sw = show("d-serial").closest("div");
+  if (mode === "edit"){
+    show("dev-title").textContent = "Edit " + (d.hostname || "device");
+    kb.classList.add("hidden"); sw.classList.add("hidden");
+    show("d-host").value = d.hostname || ""; show("d-dept").value = d.department || "";
+    await fillSites("d-site", d.site || null);
+  } else {
+    show("dev-title").textContent = "Add device";
+    kb.classList.remove("hidden"); sw.classList.remove("hidden");
+    ["d-host","d-dept","d-serial","d-keyid","d-key"].forEach(i => show(i).value = "");
+    await fillSites("d-site", null);
+  }
+  show("dev-modal").classList.remove("hidden");
+}
+show("d-save").onclick = async () => {
+  show("d-err").textContent = ""; show("d-save").disabled = true;
+  try {
+    if (devMode === "edit"){
+      await api(`/devices/${devId}`, {method:"PATCH", body: JSON.stringify({hostname: show("d-host").value, site: show("d-site").value, department: show("d-dept").value})});
+    } else {
+      const host = show("d-host").value.trim(), site = show("d-site").value.trim(), serial = show("d-serial").value.trim();
+      const kidHex = show("d-keyid").value.replace(/[^0-9A-Fa-f]/g,"").toUpperCase();
+      const keyDig = show("d-key").value.replace(/\D/g,"");
+      if (!host || !site) throw new Error("Hostname and Site are required.");
+      if (kidHex.length !== 32) throw new Error("Recovery Key ID must be 32 hex characters (8-4-4-4-12).");
+      if (keyDig.length !== 48) throw new Error("Recovery Key must be 48 digits (8 groups of 6).");
+      const kid = [kidHex.slice(0,8),kidHex.slice(8,12),kidHex.slice(12,16),kidHex.slice(16,20),kidHex.slice(20)].join("-");
+      const key = keyDig.match(/.{6}/g).join("-");
+      const createDevice = rep => api("/devices", {method:"POST", body: JSON.stringify({hostname:host, site, department: show("d-dept").value, serial: serial||null, volume_id: kid, replace_existing: !!rep})});
+      let dev;
+      try { dev = await createDevice(false); }
+      catch(e){
+        if (e.detail && e.detail.error === "duplicate_serial"){
+          const who = e.detail.existing.map(x => `${x.hostname} (${x.site})`).join(", ");
+          if (!confirm(`Serial ${serial} already belongs to: ${who}.\n\nArchive that record and replace it with this one? The old record is kept (archived), not deleted.`)){ show("d-err").textContent = "Cancelled — nothing changed."; show("d-save").disabled = false; return; }
+          dev = await createDevice(true);
+        } else throw e;
+      }
+      await api(`/devices/${dev.id}/keys`, {method:"POST", body: JSON.stringify({key_material: key, key_identifier: kid, source: "setup"})});
+    }
+    show("dev-modal").classList.add("hidden"); toast("Device saved."); load();
+  } catch(e){ show("d-err").textContent = e.message; }
+  finally { show("d-save").disabled = false; }
+};
+
+// ---- export ----
+document.querySelectorAll(".exp-item").forEach(b => b.onclick = () => { doExport(b.dataset.x, b.dataset.f); show("export-menu").classList.add("hidden"); });
+async function doExport(kind, fmt){
+  let path = `/export/${kind}?fmt=${fmt}`; if (kind === "inventory" && q) path += `&q=${encodeURIComponent(q)}`;
+  try {
+    const r = await fetch(path, {headers:{Authorization:"Bearer "+TOKEN}});
+    if (!r.ok){ const b = await r.json().catch(()=>({})); throw new Error(b.detail || ("Error "+r.status)); }
+    const blob = await r.blob(), url = URL.createObjectURL(blob), a = document.createElement("a");
+    a.href = url; a.download = `${kind === "audit" ? "audit-report" : "inventory"}.${fmt}`;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    toast("Export downloaded.");
+  } catch(e){ toast("Export failed: " + e.message); }
+}
+
+// ---- data quality ----
+document.querySelectorAll(".dq-close").forEach(b => b.onclick = () => show("dq-modal").classList.add("hidden"));
+async function openDQ(){
+  show("dq-summary").innerHTML = `<span class="text-outline text-body-sm">Loading…</span>`; show("dq-rows").innerHTML = "";
+  show("dq-modal").classList.remove("hidden");
+  const LBL = {hostname:"hostname", serial:"serial", recovery_key_id:"Recovery Key ID"};
+  try {
+    const r = await api("/devices-quality/incomplete");
+    const chip = (n,label,tone) => `<span class="inline-flex items-center px-2.5 py-1 rounded-full text-label-sm font-semibold ${tone}">${n} ${esc(label)}</span>`;
+    show("dq-summary").innerHTML =
+      chip(r.incomplete, "incomplete of "+r.total, "bg-tertiary-fixed text-on-tertiary-fixed-variant") +
+      chip(r.missing_hostname, "no hostname", "bg-surface-container text-on-surface-variant") +
+      chip(r.missing_serial, "no serial", "bg-surface-container text-on-surface-variant") +
+      chip(r.missing_recovery_key_id, "no key ID", "bg-surface-container text-on-surface-variant");
+    show("dq-rows").innerHTML = (r.devices||[]).map(d => `<tr class="hover:bg-surface">
+      <td class="py-2.5 px-4 font-semibold">${d.hostname && d.hostname.trim() ? esc(d.hostname) : '<span class="text-outline">—</span>'}</td>
+      <td class="py-2.5 px-4">${d.site ? esc(d.site) : '<span class="text-outline">—</span>'}</td>
+      <td class="py-2.5 px-4 font-code-sm text-code-sm">${d.serial ? esc(d.serial) : '<span class="text-outline">—</span>'}</td>
+      <td class="py-2.5 px-4 font-code-sm text-code-sm">${d.recovery_key_id ? esc(d.recovery_key_id) : '<span class="text-outline">—</span>'}</td>
+      <td class="py-2.5 px-4 text-tertiary text-body-sm">${(d.missing||[]).map(f => esc(LBL[f]||f)).join(", ")}</td></tr>`).join("")
+      || `<tr><td colspan="5" class="py-6 text-center text-secondary">No gaps — every record has hostname, serial, and key ID.</td></tr>`;
+  } catch(e){ show("dq-summary").innerHTML = `<span class="text-error text-body-sm">${esc(e.message)}</span>`; }
+}
+
+// ---- import ----
+let impRows = [];
+document.querySelectorAll(".imp-close").forEach(b => b.onclick = () => show("imp-modal").classList.add("hidden"));
+async function apiUpload(path, fd){
+  const r = await fetch(path, {method:"POST", headers:{Authorization:"Bearer "+TOKEN}, body: fd});
+  if (r.status === 401){ sessionStorage.removeItem("blm_token"); location.replace("/ui/login.html"); return new Promise(()=>{}); }
+  const b = await r.json().catch(()=>({}));
+  if (!r.ok) throw new Error((b.detail && (b.detail.message || b.detail)) || ("Error "+r.status));
+  return b;
+}
+function impTab(which){
+  const txt = which === "txt";
+  show("imp-pane-txt").classList.toggle("hidden", !txt);
+  show("imp-pane-csv").classList.toggle("hidden", txt);
+  show("imp-tab-txt").className = "imp-tab px-3 py-1 rounded " + (txt ? "bg-surface-container-lowest font-semibold text-primary shadow-sm" : "text-on-surface-variant hover:text-on-surface");
+  show("imp-tab-csv").className = "imp-tab px-3 py-1 rounded " + (!txt ? "bg-surface-container-lowest font-semibold text-primary shadow-sm" : "text-on-surface-variant hover:text-on-surface");
+}
+show("imp-tab-txt").onclick = () => impTab("txt");
+show("imp-tab-csv").onclick = () => impTab("csv");
+function openImport(){
+  impRows = []; show("imp-preview").innerHTML = ""; show("imp-errors").innerHTML = "";
+  show("imp-commit").disabled = true; show("imp-count").textContent = "";
+  show("imp-txt").value = ""; show("imp-csv").value = ""; impTab("txt");
+  show("imp-modal").classList.remove("hidden");
+}
+show("imp-txt").onchange = async e => {
+  const files = [...e.target.files]; if (!files.length) return;
+  const fd = new FormData(); files.forEach(f => fd.append("files", f));
+  try {
+    const r = await apiUpload("/import/parse-txt", fd);
+    impRows = (r.parsed||[]).filter(p => p.key_identifier && p.key_material)
+      .map(p => ({hostname:p.hostname||null, site:p.site||null, serial:p.serial||null, key_identifier:p.key_identifier, key_material:p.key_material}));
+    renderImp(impRows, r.errors, `${files.length} file(s) parsed`);
+  } catch(err){ show("imp-errors").textContent = err.message; }
+};
+show("imp-csv").onchange = async e => {
+  if (!e.target.files.length) return;
+  const fd = new FormData(); fd.append("file", e.target.files[0]);
+  try {
+    const r = await apiUpload("/import/parse-csv", fd);
+    impRows = r.rows || [];
+    const note = Object.entries(r.mapping||{}).map(([k,v]) => `${k} ← ${esc(v)}`).join(" · ");
+    renderImp(impRows, r.warnings, "Columns matched: " + note);
+  } catch(err){ show("imp-errors").textContent = err.message; }
+};
+function renderImp(rows, msgs, note){
+  show("imp-errors").innerHTML = (msgs||[]).map(esc).join("<br>");
+  if (!rows.length){ show("imp-preview").innerHTML = `<div class="text-outline">No usable rows found.</div>`; show("imp-commit").disabled = true; show("imp-count").textContent = ""; return; }
+  const first = rows.slice(0,8);
+  const more = rows.length > 8 ? `<div class="text-outline mt-1">…and ${rows.length-8} more</div>` : "";
+  const cell = v => v ? esc(v) : '<span class="text-outline">—</span>';
+  show("imp-preview").innerHTML = `<div class="text-outline mb-1">${esc(note)}</div>
+    <div class="overflow-x-auto rounded-lg border border-outline-variant/50"><table class="w-full text-left"><thead><tr class="bg-surface text-label-sm text-outline uppercase tracking-wider"><th class="py-2 px-3">Hostname</th><th class="py-2 px-3">Site</th><th class="py-2 px-3">Serial</th><th class="py-2 px-3">Identifier</th><th class="py-2 px-3">Key</th></tr></thead><tbody class="divide-y divide-outline-variant/30">
+    ${first.map(r => `<tr><td class="py-2 px-3 font-semibold">${cell(r.hostname)}</td><td class="py-2 px-3">${cell(r.site)}</td><td class="py-2 px-3 font-code-sm text-code-sm">${cell(r.serial)}</td><td class="py-2 px-3 font-code-sm text-code-sm">${esc(r.key_identifier)}</td><td class="py-2 px-3 font-code-sm text-outline">${esc(String(r.key_material).slice(0,7))}…</td></tr>`).join("")}
+    </tbody></table></div>${more}`;
+  show("imp-commit").disabled = false; show("imp-count").textContent = `(${rows.length})`;
+}
+show("imp-commit").onclick = async () => {
+  show("imp-commit").disabled = true;
+  try {
+    const r = await api("/import/commit", {method:"POST", body: JSON.stringify(impRows)});
+    show("imp-preview").innerHTML = `<div class="p-3 rounded-lg bg-secondary-container/40 text-on-secondary-container"><b>Import complete.</b> Created ${r.created}, skipped ${r.skipped} (already existed)${r.errors.length ? `, ${r.errors.length} errors` : ""}.</div>`;
+    show("imp-errors").innerHTML = (r.errors||[]).map(esc).join("<br>");
+    load();
+  } catch(e){ show("imp-errors").textContent = e.message; show("imp-commit").disabled = false; }
+};
 
 let st = null;
 show("search").oninput = e => { q = e.target.value; page = 0; clearTimeout(st); st = setTimeout(load, 200); };
