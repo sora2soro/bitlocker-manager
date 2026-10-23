@@ -105,6 +105,36 @@
   </div>
 </main>
 
+<!-- UNLOCK MODAL -->
+<div id="ul-modal" class="hidden fixed inset-0 z-30 flex items-start justify-center p-4" style="background:rgba(15,23,42,0.4)">
+  <div class="bg-surface-container-lowest rounded-xl shadow-xl w-full max-w-md mt-16 border border-outline-variant">
+    <div class="flex items-center justify-between px-5 py-3.5 border-b border-outline-variant/50">
+      <h3 id="ul-title" class="text-headline-md text-on-surface flex items-center gap-2"><span class="material-symbols-outlined text-[20px] text-primary">usb</span>Unlock</h3>
+      <button class="ul-close text-outline hover:text-on-surface"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div id="ul-body" class="p-5 flex flex-col gap-3"></div>
+  </div>
+</div>
+
+<!-- REVEAL MODAL (break-glass) -->
+<div id="rv-modal" class="hidden fixed inset-0 z-30 flex items-start justify-center p-4" style="background:rgba(15,23,42,0.4)">
+  <div class="bg-surface-container-lowest rounded-xl shadow-xl w-full max-w-md mt-16 border border-outline-variant">
+    <div class="flex items-center justify-between px-5 py-3.5 border-b border-outline-variant/50 bg-error-container/40">
+      <h3 class="text-headline-md text-on-error-container flex items-center gap-2"><span class="material-symbols-outlined text-[20px]">warning</span>Break-glass reveal</h3>
+      <button class="rv-close text-outline hover:text-on-surface"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div class="p-5 flex flex-col gap-3">
+      <div class="p-3 rounded-lg bg-tertiary-fixed/50 text-on-tertiary-fixed-variant text-body-sm">Reveals the plaintext recovery key for <b id="rv-host"></b>. Logged as high-severity and flagged for rotation. Use only when the Pico/USB path fails.</div>
+      <div><label class="text-label-md text-on-surface-variant">Reason / ticket</label>
+        <input id="rv-reason" class="mt-1 w-full px-3 py-2 bg-surface rounded-lg border border-outline-variant text-body-md focus:outline-none focus:border-primary" placeholder="e.g. USB path failed on this unit"></div>
+      <div><label class="text-label-md text-on-surface-variant">Step-up MFA code</label>
+        <input id="rv-code" inputmode="numeric" maxlength="6" class="mt-1 w-full px-3 py-2 bg-surface rounded-lg border border-outline-variant text-body-lg tracking-[0.3em] text-center font-code-sm focus:outline-none focus:border-primary" placeholder="000000"></div>
+      <button id="rv-go" class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-error text-on-error font-semibold hover:bg-on-error-container"><span class="material-symbols-outlined text-[18px]">key</span>Reveal key</button>
+      <div id="rv-out"></div>
+    </div>
+  </div>
+</div>
+
 <!-- toast -->
 <div id="toast" class="hidden fixed bottom-5 left-1/2 -translate-x-1/2 z-40 px-4 py-2.5 rounded-lg bg-inverse-surface text-inverse-on-surface text-body-md shadow-lg"></div>
 
@@ -142,7 +172,8 @@ show("signout").onclick = () => { sessionStorage.removeItem("blm_token"); locati
 let toastT = null;
 function toast(msg){ const t = show("toast"); t.textContent = msg; t.classList.remove("hidden"); clearTimeout(toastT); toastT = setTimeout(()=>t.classList.add("hidden"), 2200); }
 function soon(){ toast("This flow lands in the next migration step."); }
-["menu-helper","btn-dq","btn-export","btn-import","btn-add"].forEach(id => show(id).onclick = soon);
+["btn-dq","btn-export","btn-import","btn-add"].forEach(id => show(id).onclick = soon);
+show("menu-helper").onclick = () => downloadHelper(null);
 
 // ---- devices list ----
 let q = "", page = 0; const SIZE = 25;
@@ -168,10 +199,11 @@ function draw(rows, off){
     const status = d.has_active_key
       ? `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-label-sm font-semibold bg-secondary-container/60 text-secondary border border-secondary-fixed"><span class="material-symbols-outlined text-[13px]">lock</span>key on file</span>`
       : `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-label-sm font-semibold bg-tertiary-fixed text-on-tertiary-fixed-variant border border-tertiary-fixed-dim"><span class="material-symbols-outlined text-[13px]">lock_open</span>no key</span>`;
-    const unlock = d.has_active_key ? `<button data-act="unlock" class="row-act inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-primary text-on-primary text-label-md font-medium hover:bg-surface-tint"><span class="material-symbols-outlined text-[16px]">usb</span>Unlock</button>` : "";
-    const reveal = (isSuper && d.has_active_key) ? `<button data-act="reveal" class="row-act inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-error/40 text-error text-label-md font-medium hover:bg-error-container/40"><span class="material-symbols-outlined text-[16px]">key</span>Reveal</button>` : "";
-    const edit = isSuper ? `<button data-act="edit" class="row-act p-1.5 rounded-md border border-outline-variant text-outline hover:text-on-surface hover:bg-surface-container" title="Edit"><span class="material-symbols-outlined text-[16px]">edit</span></button>` : "";
-    const archive = isSuper ? `<button data-act="archive" class="row-act p-1.5 rounded-md border border-outline-variant text-outline hover:text-on-surface hover:bg-surface-container" title="Archive"><span class="material-symbols-outlined text-[16px]">inventory_2</span></button>` : "";
+    const idh = `data-id="${d.id}" data-host="${esc(d.hostname||'')}"`;
+    const unlock = d.has_active_key ? `<button data-act="unlock" ${idh} class="row-act inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-primary text-on-primary text-label-md font-medium hover:bg-surface-tint"><span class="material-symbols-outlined text-[16px]">usb</span>Unlock</button>` : "";
+    const reveal = (isSuper && d.has_active_key) ? `<button data-act="reveal" ${idh} class="row-act inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-error/40 text-error text-label-md font-medium hover:bg-error-container/40"><span class="material-symbols-outlined text-[16px]">key</span>Reveal</button>` : "";
+    const edit = isSuper ? `<button data-act="edit" ${idh} class="row-act p-1.5 rounded-md border border-outline-variant text-outline hover:text-on-surface hover:bg-surface-container" title="Edit"><span class="material-symbols-outlined text-[16px]">edit</span></button>` : "";
+    const archive = isSuper ? `<button data-act="archive" ${idh} class="row-act p-1.5 rounded-md border border-outline-variant text-outline hover:text-on-surface hover:bg-surface-container" title="Archive"><span class="material-symbols-outlined text-[16px]">inventory_2</span></button>` : "";
     return `<tr class="hover:bg-surface transition-colors">
       <td class="py-4 px-4 pl-6 font-semibold text-on-surface">${host}</td>
       <td class="py-4 px-4">${serial}</td>
@@ -181,8 +213,111 @@ function draw(rows, off){
       <td class="py-4 pr-6 pl-4 text-right whitespace-nowrap"><div class="inline-flex items-center gap-1.5">${unlock}${reveal}${edit}${archive}</div></td>
     </tr>`;
   }).join("") || `<tr><td colspan="6" class="py-10 text-center text-outline">No devices match.</td></tr>`;
-  show("rows").querySelectorAll(".row-act").forEach(b => b.onclick = soon);
+  show("rows").querySelectorAll(".row-act").forEach(b => b.onclick = () => {
+    const act = b.dataset.act, id = b.dataset.id, host = b.dataset.host;
+    if (act === "unlock") return openUnlock(id, host);
+    if (act === "reveal") return openReveal(id, host);
+    if (act === "archive") return archiveDevice(id, host);
+    soon();   // edit → next phase
+  });
 }
+// ---- unlock (Pico) ----
+const HELPER = "http://127.0.0.1:8765";
+let ulCtx = null;
+document.querySelectorAll(".ul-close").forEach(b => b.onclick = () => show("ul-modal").classList.add("hidden"));
+function openUnlock(id, host){
+  ulCtx = {id, host};
+  show("ul-title").innerHTML = `<span class="material-symbols-outlined text-[20px] text-primary">usb</span>Unlock ${esc(host || "device")}`;
+  show("ul-body").innerHTML = `
+    <p class="text-body-sm text-outline">Loads the recovery key onto your plugged-in Pico. The key is never shown on screen.</p>
+    <label class="text-label-md text-on-surface-variant">Ticket / reason</label>
+    <input id="ul-ticket" class="w-full px-3 py-2 bg-surface rounded-lg border border-outline-variant text-body-md focus:outline-none focus:border-primary" placeholder="e.g. INC-1234 — user locked out">
+    <button id="ul-go" class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-on-primary font-semibold hover:bg-surface-tint"><span class="material-symbols-outlined text-[18px]">bolt</span>Load key to Pico</button>`;
+  show("ul-go").onclick = runUnlock;
+  show("ul-modal").classList.remove("hidden"); show("ul-ticket").focus();
+}
+async function runUnlock(){
+  const ticket = show("ul-ticket").value;
+  show("ul-body").innerHTML = `<div class="flex items-center gap-2 text-on-surface py-2"><span class="material-symbols-outlined animate-spin text-primary">progress_activity</span>Loading the recovery key onto the Pico…</div>`;
+  try {
+    const co = await api("/checkouts", {method:"POST", body: JSON.stringify({device_id: ulCtx.id, ticket_ref: ticket})});
+    let res;
+    try {
+      const r = await fetch(HELPER+"/load", {method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({api: location.origin, checkout_id: co.checkout_id, provisioning_token: co.provisioning_token})});
+      res = await r.json();
+      if (!r.ok || !res.ok) throw new Error(res.error || "helper error");
+    } catch(err){ if (String(err).includes("Failed to fetch")) throw new Error("HELPER_DOWN"); throw err; }
+    show("ul-body").innerHTML = `<div class="flex items-start gap-2 p-3 rounded-lg bg-secondary-container/40 text-on-secondary-container"><span class="material-symbols-outlined text-secondary">check_circle</span><div>Key loaded onto the Pico (<b>${esc(res.drive)}</b>). Plug the Pico into the locked machine — it types the key and unlocks it.</div></div>`;
+  } catch(e){
+    if (e.message === "HELPER_DOWN"){
+      show("ul-body").innerHTML = `
+        <div class="flex items-start gap-2 p-3 rounded-lg bg-tertiary-fixed/60 text-on-tertiary-fixed-variant"><span class="material-symbols-outlined">power</span><div><b>The Unlock Helper isn't running on this PC.</b> It's a small program that lets this page write the key to your Pico.</div></div>
+        <button id="ul-dl" class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-on-primary font-semibold hover:bg-surface-tint"><span class="material-symbols-outlined text-[18px]">download</span>Download Unlock Helper</button>
+        <ol class="text-body-sm text-outline list-decimal pl-5 space-y-0.5"><li>Unzip all files into one folder.</li><li>Double-click <code class="font-code-sm">install-helper.cmd</code> and wait for <b>SUCCESS</b>.</li><li>Plug in your Pico, then click Unlock again.</li></ol>
+        <div id="ul-dl-msg" class="text-body-sm"></div>`;
+      show("ul-dl").onclick = () => downloadHelper(show("ul-dl-msg"));
+    } else {
+      show("ul-body").innerHTML = `<div class="p-3 rounded-lg bg-error-container text-on-error-container">${esc(e.message)}</div>`;
+    }
+  }
+}
+
+// ---- break-glass reveal ----
+let rvCtx = null, rvTimer = null;
+document.querySelectorAll(".rv-close").forEach(b => b.onclick = () => { clearInterval(rvTimer); show("rv-modal").classList.add("hidden"); });
+function openReveal(id, host){
+  rvCtx = {id, host}; clearInterval(rvTimer);
+  show("rv-host").textContent = host || "this device";
+  show("rv-reason").value = ""; show("rv-code").value = ""; show("rv-out").innerHTML = "";
+  show("rv-modal").classList.remove("hidden");
+}
+show("rv-go").onclick = async () => {
+  show("rv-out").innerHTML = "";
+  try {
+    const r = await api(`/devices/${rvCtx.id}/reveal`, {method:"POST", body: JSON.stringify({code: show("rv-code").value, reason: show("rv-reason").value})});
+    showRevealedKey(r.key_material, r.warning || ""); show("rv-code").value = "";
+  } catch(e){ show("rv-out").innerHTML = `<div class="text-error text-body-sm mt-1">${esc(e.message)}</div>`; }
+};
+function showRevealedKey(key, warning){
+  let secs = 30; clearInterval(rvTimer);
+  const render = () => {
+    show("rv-out").innerHTML = `
+      <div class="font-code-sm text-code-sm bg-surface-container text-on-surface rounded-lg p-3 break-all select-all tracking-wide">${esc(key)}</div>
+      <div class="flex items-center justify-between mt-2">
+        <button id="rv-copy" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-outline-variant text-body-md text-on-surface hover:bg-surface-container"><span class="material-symbols-outlined text-[16px]">content_copy</span>Copy</button>
+        <span class="text-body-sm text-outline">Auto-hides in <b id="rv-cd">${secs}</b>s</span>
+        <button id="rv-hide" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-outline-variant text-body-md text-on-surface hover:bg-surface-container">Hide now</button>
+      </div>
+      ${warning ? `<div class="text-tertiary text-body-sm mt-2">${esc(warning)}</div>` : ""}`;
+    show("rv-copy").onclick = () => navigator.clipboard.writeText(key).then(() => { show("rv-copy").innerHTML = `<span class="material-symbols-outlined text-[16px]">check</span>Copied`; });
+    show("rv-hide").onclick = hideKey;
+  };
+  const hideKey = () => { clearInterval(rvTimer); show("rv-out").innerHTML = `<div class="text-outline text-body-sm">Key hidden.</div>`; };
+  render();
+  rvTimer = setInterval(() => { secs--; const cd = show("rv-cd"); if (cd) cd.textContent = secs; if (secs <= 0) hideKey(); }, 1000);
+}
+
+// ---- archive ----
+async function archiveDevice(id, host){
+  if (!confirm(`Archive ${host || "this device"}? It's hidden from the list but its record and history are kept.`)) return;
+  try { await api(`/devices/${id}/archive`, {method:"POST"}); toast("Device archived."); load(); }
+  catch(e){ alert(e.message); }
+}
+
+// ---- helper download ----
+async function downloadHelper(msgEl){
+  const set = html => { if (msgEl) msgEl.innerHTML = html; else toast(String(html).replace(/<[^>]+>/g,"")); };
+  try {
+    const r = await fetch("/download/unlock-helper", {headers:{"Authorization":"Bearer "+TOKEN}});
+    if (!r.ok){ const b = await r.json().catch(()=>({})); set(`<span class="text-error">${esc((b.detail && b.detail.message) || "Download unavailable.")}</span>`); return; }
+    const blob = await r.blob(); const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "BLM-Unlock-Helper.zip";
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    set(`<span class="text-secondary">Downloaded. Unzip and run install-helper.cmd.</span>`);
+  } catch(err){ set(`<span class="text-error">Download failed: ${esc(String(err))}</span>`); }
+}
+
 let st = null;
 show("search").oninput = e => { q = e.target.value; page = 0; clearTimeout(st); st = setTimeout(load, 200); };
 show("prev").onclick = () => { if (page>0){ page--; load(); } };
