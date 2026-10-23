@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html class="h-full bg-surface" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>BitLocker Manager — Sign in</title>
+<link rel="stylesheet" href="assets/app.css"/>
+</head>
+<body class="min-h-full bg-background font-body-md text-on-surface antialiased flex flex-col">
+
+<!-- TOP BAR (brand only) -->
+<header class="w-full bg-primary text-on-primary shadow-sm border-b border-outline-variant/30">
+  <div class="max-w-[1440px] mx-auto px-space-lg py-space-sm flex items-center">
+    <div class="flex items-center gap-2 text-headline-md font-semibold text-on-primary">
+      <span class="material-symbols-outlined text-[22px]">lock</span><span>BitLocker Manager</span>
+    </div>
+  </div>
+</header>
+
+<!-- SIGN-IN -->
+<main class="flex-1 flex items-center justify-center px-4 py-10">
+  <div class="w-full max-w-md">
+    <div class="bg-surface-container-lowest rounded-xl border border-outline-variant/60 shadow-sm overflow-hidden">
+      <div class="px-6 pt-6 pb-2 flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+          <span class="material-symbols-outlined text-[22px]">shield_person</span>
+        </div>
+        <div>
+          <h1 class="text-headline-lg text-on-surface">Sign in</h1>
+          <p class="text-body-sm text-outline">Enterprise key escrow console</p>
+        </div>
+      </div>
+
+      <div class="p-6 pt-4 flex flex-col gap-4">
+        <!-- Step 1: credentials -->
+        <div id="step-creds" class="flex flex-col gap-4">
+          <div>
+            <label class="text-label-md text-on-surface-variant">Username</label>
+            <div class="mt-1 relative">
+              <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-outline pointer-events-none">person</span>
+              <input id="li-user" autocomplete="username" class="w-full pl-9 pr-3 py-2.5 bg-surface rounded-lg border border-outline-variant text-body-md focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all" placeholder="username">
+            </div>
+          </div>
+          <div>
+            <label class="text-label-md text-on-surface-variant">Password</label>
+            <div class="mt-1 flex">
+              <div class="relative flex-1">
+                <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-outline pointer-events-none">lock</span>
+                <input id="li-pass" type="password" autocomplete="current-password" class="w-full pl-9 pr-3 py-2.5 bg-surface rounded-l-lg border border-outline-variant border-r-0 text-body-md focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all" placeholder="••••••••">
+              </div>
+              <button type="button" id="li-pass-toggle" class="px-3 rounded-r-lg border border-outline-variant bg-surface-container text-outline hover:text-on-surface"><span class="material-symbols-outlined text-[18px]">visibility</span></button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2: MFA -->
+        <div id="step-mfa" class="hidden flex-col gap-3">
+          <div class="flex items-center gap-2 text-body-sm text-on-surface-variant">
+            <span class="material-symbols-outlined text-[18px] text-secondary">fingerprint</span>
+            <span>Enter the 6-digit code from your authenticator.</span>
+          </div>
+          <input id="li-code" inputmode="numeric" maxlength="6" class="w-full px-3 py-2.5 bg-surface rounded-lg border border-outline-variant text-body-lg tracking-[0.4em] text-center font-code-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" placeholder="000000">
+        </div>
+
+        <button id="li-btn" class="inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-lg bg-primary text-on-primary font-semibold text-body-md hover:bg-surface-tint transition-colors active:scale-98">
+          <span id="li-btn-label">Continue</span>
+          <span id="li-spin" class="hidden material-symbols-outlined text-[18px] animate-spin">progress_activity</span>
+        </button>
+        <div id="li-err" class="text-body-sm text-error min-h-[1rem]"></div>
+      </div>
+    </div>
+    <p class="text-center text-body-sm text-outline mt-4">Access is logged. Authorized IT personnel only.</p>
+  </div>
+</main>
+
+<script>
+if (sessionStorage.getItem("blm_token")) location.replace("/ui/");
+const show = id => document.getElementById(id);
+let mfaToken = null, busy = false;
+async function post(path, body){
+  const r = await fetch(path, {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(body)});
+  const b = await r.json().catch(()=>({}));
+  if (!r.ok) throw new Error(b.detail || ("HTTP "+r.status));
+  return b;
+}
+function setBusy(on){ busy = on; show("li-spin").classList.toggle("hidden", !on); show("li-btn").disabled = on; }
+function fail(msg){ show("li-err").textContent = msg; }
+
+async function submit(){
+  if (busy) return;
+  show("li-err").textContent = "";
+  try {
+    setBusy(true);
+    if (!mfaToken){
+      const u = show("li-user").value.trim(), p = show("li-pass").value;
+      if (!u || !p){ fail("Enter your username and password."); setBusy(false); return; }
+      const r = await post("/auth/login", {username: u, password: p});
+      if (r.access_token){ sessionStorage.setItem("blm_token", r.access_token); location.replace("/ui/"); return; }
+      mfaToken = r.mfa_token;
+      show("step-creds").classList.add("hidden");
+      show("step-mfa").classList.remove("hidden"); show("step-mfa").classList.add("flex");
+      show("li-btn-label").textContent = "Verify";
+      show("li-code").focus();
+    } else {
+      const code = show("li-code").value.trim();
+      if (!/^\d{6}$/.test(code)){ fail("Enter the 6-digit code."); setBusy(false); return; }
+      const r = await post("/auth/mfa", {mfa_token: mfaToken, code});
+      if (!r.access_token) throw new Error("Verification failed.");
+      sessionStorage.setItem("blm_token", r.access_token); location.replace("/ui/"); return;
+    }
+  } catch(e){ fail(e.message || "Sign-in failed."); }
+  finally { setBusy(false); }
+}
+show("li-btn").onclick = submit;
+show("li-pass-toggle").onclick = () => { const f = show("li-pass"); f.type = f.type==="password" ? "text" : "password"; };
+["li-user","li-pass","li-code"].forEach(id => show(id).addEventListener("keydown", e => { if (e.key === "Enter") submit(); }));
+</script>
+</body>
+</html>
