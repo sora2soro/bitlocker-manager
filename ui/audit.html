@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html class="h-full bg-surface" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>BitLocker Manager — Audit</title>
+<link rel="stylesheet" href="assets/app.css"/>
+</head>
+<body class="min-h-full bg-background font-body-md text-on-surface antialiased flex flex-col">
+
+<!-- TOP BAR -->
+<header class="w-full bg-primary text-on-primary shadow-sm border-b border-outline-variant/30">
+  <div class="max-w-[1440px] mx-auto px-space-lg py-space-sm flex items-center justify-between">
+    <div class="flex items-center gap-space-xl">
+      <a class="flex items-center gap-2 text-headline-md font-semibold text-on-primary" href="/ui/fleet.html">
+        <span class="material-symbols-outlined text-[22px]">lock</span><span>BitLocker Manager</span>
+      </a>
+      <nav class="hidden md:flex items-center gap-6">
+        <a class="text-primary-fixed hover:text-on-primary text-label-md py-1" href="/ui/fleet.html">Fleet</a>
+        <a class="text-on-primary font-semibold border-b-2 border-secondary-fixed text-label-md py-1" href="#">Audit</a>
+        <a id="nav-settings" class="text-primary-fixed hover:text-on-primary text-label-md py-1 hidden" href="/ui/users.html">Settings</a>
+      </nav>
+    </div>
+    <div class="relative">
+      <button id="profile-btn" class="flex items-center gap-2 bg-primary-container/40 hover:bg-primary-container/60 cursor-pointer transition-all px-3 py-1.5 rounded-lg border border-primary-fixed-dim/30">
+        <span id="avatar-top" class="w-6 h-6 rounded-full bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center font-bold text-xs uppercase">SA</span>
+        <span id="whoami" class="text-label-md font-medium text-on-primary">—</span>
+        <span class="material-symbols-outlined text-[18px] text-primary-fixed">arrow_drop_down</span>
+      </button>
+      <div id="profile-menu" class="hidden absolute right-0 mt-1 w-48 bg-surface-container-lowest rounded-lg border border-outline-variant shadow-lg py-1 z-20">
+        <a id="menu-settings" href="/ui/users.html" class="hidden flex items-center gap-2 px-3 py-2 text-body-md text-on-surface hover:bg-surface-container"><span class="material-symbols-outlined text-[18px]">manage_accounts</span>Settings — Users</a>
+        <div class="my-1 border-t border-outline-variant/40"></div>
+        <button id="signout" class="w-full text-left flex items-center gap-2 px-3 py-2 text-body-md text-error hover:bg-surface-container"><span class="material-symbols-outlined text-[18px]">logout</span>Sign out</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- SUB-HEADER -->
+<section class="bg-surface-container-lowest border-b border-outline-variant/40">
+  <div class="max-w-[1440px] mx-auto px-space-lg py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div class="flex flex-col gap-1">
+      <div class="flex items-center gap-2 text-body-sm text-outline">
+        <span class="material-symbols-outlined text-[16px] text-primary">history</span><span class="font-medium text-on-surface">Audit</span>
+      </div>
+      <div class="flex items-baseline gap-3">
+        <h1 class="text-headline-lg text-on-surface">Tamper-evident Audit Log</h1>
+        <span id="chain-badge" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-label-sm font-semibold bg-surface-container text-outline">checking…</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MAIN -->
+<main class="flex-1 max-w-[1440px] w-full mx-auto px-space-lg py-6 flex flex-col gap-5">
+  <div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant/50 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+    <div class="relative min-w-[280px] max-w-md w-full flex-1">
+      <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-outline pointer-events-none">search</span>
+      <input id="search" class="w-full pl-9 pr-4 py-2 bg-surface text-on-surface text-body-md rounded-lg border border-outline-variant focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all placeholder:text-outline/70" placeholder="Filter by action or detail..." type="text"/>
+    </div>
+    <label class="inline-flex items-center gap-2 text-body-md text-on-surface select-none">
+      <input id="high-only" type="checkbox" class="rounded border-outline-variant text-primary focus:ring-primary/20 w-4 h-4"><span>High-severity only</span>
+    </label>
+  </div>
+
+  <div class="bg-surface-container-lowest rounded-xl border border-outline-variant/60 shadow-sm overflow-hidden flex flex-col">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="bg-surface border-b border-outline-variant/50 text-label-sm text-outline uppercase tracking-wider">
+            <th class="py-3.5 px-4 pl-6 w-20">Seq</th>
+            <th class="py-3.5 px-4">Action</th>
+            <th class="py-3.5 px-4 w-28">Severity</th>
+            <th class="py-3.5 pr-6 px-4">Detail</th>
+          </tr>
+        </thead>
+        <tbody id="rows" class="divide-y divide-outline-variant/30 text-body-md"></tbody>
+      </table>
+    </div>
+    <div class="px-6 py-3.5 bg-surface border-t border-outline-variant/40 text-body-sm text-outline"><span id="footer-count">—</span></div>
+  </div>
+</main>
+
+<script>
+const TOKEN = sessionStorage.getItem("blm_token");
+if (!TOKEN) location.replace("/ui/login.html");
+const esc = s => (s==null?"":String(s)).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function claims(){ try { const p = TOKEN.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'); return JSON.parse(decodeURIComponent(escape(atob(p)))); } catch(e){ return {}; } }
+async function api(path, opts={}){
+  const r = await fetch(path, {...opts, headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN, ...(opts.headers||{})}});
+  if (r.status === 401){ sessionStorage.removeItem("blm_token"); location.replace("/ui/login.html"); return new Promise(()=>{}); }
+  const b = await r.json().catch(()=>({}));
+  if (!r.ok) throw new Error((b.detail && (b.detail.message||b.detail)) || ("Error "+r.status));
+  return b;
+}
+const show = id => document.getElementById(id);
+const ME = claims();
+const canManage = ["admin","super_admin"].includes(ME.role);
+function segInitials(name){ const s=(name||"?").split(/[^A-Za-z0-9]+/).filter(Boolean); return (s.slice(0,2).map(x=>x[0]).join("")||(name||"?")[0]).toUpperCase(); }
+show("whoami").textContent = ME.role + (ME.scope ? " · "+ME.scope : "");
+show("avatar-top").textContent = segInitials(ME.sub);
+if (canManage){ show("menu-settings").classList.remove("hidden"); show("nav-settings").classList.remove("hidden"); }
+show("profile-btn").onclick = e => { e.stopPropagation(); show("profile-menu").classList.toggle("hidden"); };
+document.addEventListener("click", () => show("profile-menu").classList.add("hidden"));
+show("signout").onclick = () => { sessionStorage.removeItem("blm_token"); location.replace("/ui/login.html"); };
+
+let ALL = [], q = "", highOnly = false;
+async function load(){
+  let r;
+  try { r = await api("/audit"); }
+  catch(e){ show("rows").innerHTML = `<tr><td colspan="4" class="py-6 px-6 text-error">${esc(e.message)}</td></tr>`; show("chain-badge").textContent = "unavailable"; return; }
+  show("chain-badge").outerHTML = r.chain_valid
+    ? `<span id="chain-badge" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-label-sm font-semibold bg-secondary-container/60 text-secondary border border-secondary-fixed"><span class="material-symbols-outlined text-[14px]">verified</span>chain intact</span>`
+    : `<span id="chain-badge" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-label-sm font-semibold bg-error-container text-on-error-container border border-error/30"><span class="material-symbols-outlined text-[14px]">gpp_bad</span>CHAIN BROKEN — tampering detected</span>`;
+  ALL = (r.entries||[]).slice().reverse();   // newest first
+  draw();
+}
+function draw(){
+  const rows = ALL.filter(e => {
+    if (highOnly && e.severity !== "high") return false;
+    if (!q) return true;
+    return [e.action, e.detail||""].join(" ").toLowerCase().includes(q.toLowerCase());
+  });
+  const sevPill = s => s === "high"
+    ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-label-sm font-semibold bg-error-container text-on-error-container">high</span>`
+    : `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-label-sm font-medium bg-surface-container text-on-surface-variant">${esc(s)}</span>`;
+  show("rows").innerHTML = rows.map(e => `<tr class="${e.severity==='high'?'bg-error-container/20':''} hover:bg-surface transition-colors">
+    <td class="py-3 px-4 pl-6 font-code-sm text-code-sm text-on-surface-variant">${e.seq}</td>
+    <td class="py-3 px-4 font-medium text-on-surface">${esc(e.action)}</td>
+    <td class="py-3 px-4">${sevPill(e.severity)}</td>
+    <td class="py-3 pr-6 px-4 text-body-sm text-outline">${esc(e.detail)||''}</td>
+  </tr>`).join("") || `<tr><td colspan="4" class="py-10 text-center text-outline">No entries match.</td></tr>`;
+  show("footer-count").innerHTML = `Showing <span class="font-semibold text-on-surface">${rows.length}</span> of ${ALL.length} entries`;
+}
+let st = null;
+show("search").oninput = e => { q = e.target.value; clearTimeout(st); st = setTimeout(draw, 150); };
+show("high-only").onchange = e => { highOnly = e.target.checked; draw(); };
+load();
+</script>
+</body>
+</html>

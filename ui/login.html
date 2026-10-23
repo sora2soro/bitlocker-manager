@@ -74,7 +74,7 @@
 </main>
 
 <script>
-if (sessionStorage.getItem("blm_token")) location.replace("/ui/");
+if (sessionStorage.getItem("blm_token")) location.replace("/ui/fleet.html");
 const show = id => document.getElementById(id);
 let mfaToken = null, busy = false;
 async function post(path, body){
@@ -95,7 +95,7 @@ async function submit(){
       const u = show("li-user").value.trim(), p = show("li-pass").value;
       if (!u || !p){ fail("Enter your username and password."); setBusy(false); return; }
       const r = await post("/auth/login", {username: u, password: p});
-      if (r.access_token){ sessionStorage.setItem("blm_token", r.access_token); location.replace("/ui/"); return; }
+      if (r.access_token){ sessionStorage.setItem("blm_token", r.access_token); location.replace("/ui/fleet.html"); return; }
       mfaToken = r.mfa_token;
       show("step-creds").classList.add("hidden");
       show("step-mfa").classList.remove("hidden"); show("step-mfa").classList.add("flex");
@@ -106,7 +106,7 @@ async function submit(){
       if (!/^\d{6}$/.test(code)){ fail("Enter the 6-digit code."); setBusy(false); return; }
       const r = await post("/auth/mfa", {mfa_token: mfaToken, code});
       if (!r.access_token) throw new Error("Verification failed.");
-      sessionStorage.setItem("blm_token", r.access_token); location.replace("/ui/"); return;
+      sessionStorage.setItem("blm_token", r.access_token); location.replace("/ui/fleet.html"); return;
     }
   } catch(e){ fail(e.message || "Sign-in failed."); }
   finally { setBusy(false); }
