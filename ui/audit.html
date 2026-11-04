@@ -64,17 +64,17 @@
   </div>
 
   <div class="bg-surface-container-lowest rounded-xl border border-outline-variant/60 shadow-sm overflow-hidden flex flex-col">
-    <div class="overflow-x-auto">
-      <table class="w-full text-left border-collapse">
+    <div class="overflow-x-auto blm-scroll" style="max-height:calc(100vh - 230px)">
+      <table class="w-full text-left blm-table">
         <thead>
-          <tr class="bg-surface border-b border-outline-variant/50 text-label-sm text-outline uppercase tracking-wider">
-            <th class="py-3.5 px-4 pl-6 w-20">Seq</th>
-            <th class="py-3.5 px-4">Action</th>
-            <th class="py-3.5 px-4 w-28">Severity</th>
+          <tr class="text-label-sm text-outline uppercase tracking-wider">
+            <th class="py-3.5 px-4 pl-6 w-20 blm-num"><span class="blm-sort inline-flex items-center gap-1" data-sort="seq">Seq<span class="material-symbols-outlined blm-caret">unfold_more</span></span></th>
+            <th class="py-3.5 px-4"><span class="blm-sort inline-flex items-center gap-1" data-sort="action">Action<span class="material-symbols-outlined blm-caret">unfold_more</span></span></th>
+            <th class="py-3.5 px-4 w-28"><span class="blm-sort inline-flex items-center gap-1" data-sort="severity">Severity<span class="material-symbols-outlined blm-caret">unfold_more</span></span></th>
             <th class="py-3.5 pr-6 px-4">Detail</th>
           </tr>
         </thead>
-        <tbody id="rows" class="divide-y divide-outline-variant/30 text-body-md"></tbody>
+        <tbody id="rows" class="text-body-md"></tbody>
       </table>
     </div>
     <div class="px-6 py-3.5 bg-surface border-t border-outline-variant/40 flex items-center justify-between text-body-sm text-outline">
@@ -112,8 +112,19 @@ document.addEventListener("click", () => show("profile-menu").classList.add("hid
 show("signout").onclick = () => { sessionStorage.removeItem("blm_token"); location.replace("/ui/login.html"); };
 
 let ALL = [], q = "", highOnly = false, page = 0;
+let sortCol = "seq", sortDir = "desc";   // newest first by default
+const SEV_RANK = { low: 0, info: 0, medium: 1, high: 2 };
+const SORT_KEY = { seq: e=>e.seq, action: e=>e.action||"", severity: e=>SEV_RANK[e.severity] ?? -1 };
 // show only as many rows as fit the viewport, so the page doesn't scroll
 const PSIZE = Math.max(8, Math.floor((window.innerHeight - 390) / 48));
+function paintSort(){
+  document.querySelectorAll(".blm-sort").forEach(s => {
+    const active = s.dataset.sort === sortCol;
+    s.classList.toggle("blm-active", active);
+    const caret = s.querySelector(".blm-caret");
+    if (caret) caret.textContent = active ? (sortDir === "asc" ? "arrow_upward" : "arrow_downward") : "unfold_more";
+  });
+}
 async function load(){
   let r;
   try { r = await api("/audit"); }
@@ -121,7 +132,7 @@ async function load(){
   show("chain-badge").outerHTML = r.chain_valid
     ? `<span id="chain-badge" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-label-sm font-semibold bg-secondary-container/60 text-secondary border border-secondary-fixed"><span class="material-symbols-outlined text-[14px]">verified</span>chain intact</span>`
     : `<span id="chain-badge" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-label-sm font-semibold bg-error-container text-on-error-container border border-error/30"><span class="material-symbols-outlined text-[14px]">gpp_bad</span>CHAIN BROKEN — tampering detected</span>`;
-  ALL = (r.entries||[]).slice().reverse();   // newest first
+  ALL = (r.entries||[]);
   draw();
 }
 function draw(){
@@ -130,16 +141,22 @@ function draw(){
     if (!q) return true;
     return [e.action, e.detail||""].join(" ").toLowerCase().includes(q.toLowerCase());
   });
+  const key = SORT_KEY[sortCol], f = sortDir === "asc" ? 1 : -1;
+  rows.sort((a,b) => { const x = key(a), y = key(b);
+    const c = (typeof x === "number" && typeof y === "number") ? x - y
+            : String(x).toLowerCase().localeCompare(String(y).toLowerCase(), undefined, {numeric:true});
+    return c * f; });
   const sevPill = s => s === "high"
     ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-label-sm font-semibold bg-error-container text-on-error-container">high</span>`
-    : `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-label-sm font-medium bg-surface-container text-on-surface-variant">${esc(s)}</span>`;
+    : `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-label-sm font-medium bg-surface-container blm-muted">${esc(s)}</span>`;
   const start = page * PSIZE, pageRows = rows.slice(start, start + PSIZE);
-  show("rows").innerHTML = pageRows.map(e => `<tr class="${e.severity==='high'?'bg-error-container/20':''} hover:bg-surface transition-colors">
-    <td class="py-3 px-4 pl-6 font-code-sm text-code-sm text-on-surface-variant">${e.seq}</td>
+  show("rows").innerHTML = pageRows.map(e => `<tr class="${e.severity==='high'?'blm-row-high ':''}transition-colors">
+    <td class="py-3 px-4 pl-6 font-code-sm text-code-sm blm-muted blm-num">${e.seq}</td>
     <td class="py-3 px-4 font-medium text-on-surface">${esc(e.action)}</td>
     <td class="py-3 px-4">${sevPill(e.severity)}</td>
-    <td class="py-3 pr-6 px-4 text-body-sm text-outline">${esc(e.detail)||''}</td>
+    <td class="py-3 pr-6 px-4 text-body-sm blm-muted blm-trunc" title="${esc(e.detail)||''}">${esc(e.detail)||''}</td>
   </tr>`).join("") || `<tr><td colspan="4" class="py-10 text-center text-outline">No entries match.</td></tr>`;
+  paintSort();
   show("a-prev").disabled = page === 0;
   show("a-next").disabled = start + PSIZE >= rows.length;
   show("a-page").textContent = page + 1;
@@ -147,6 +164,12 @@ function draw(){
     ? `Showing <span class="font-semibold text-on-surface">${start+1}–${Math.min(start+PSIZE, rows.length)}</span> of ${rows.length}${ALL.length!==rows.length?` (filtered from ${ALL.length})`:""} entries`
     : "No entries match";
 }
+document.querySelectorAll(".blm-sort").forEach(s => s.onclick = () => {
+  const col = s.dataset.sort;
+  if (col === sortCol) sortDir = sortDir === "asc" ? "desc" : "asc";
+  else { sortCol = col; sortDir = (col === "seq" || col === "severity") ? "desc" : "asc"; }
+  page = 0; draw();
+});
 let st = null;
 show("search").oninput = e => { q = e.target.value; page = 0; clearTimeout(st); st = setTimeout(draw, 150); };
 show("high-only").onchange = e => { highOnly = e.target.checked; page = 0; draw(); };
