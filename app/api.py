@@ -200,6 +200,7 @@ def create_app(*, engine=None, kek=None, settings=None) -> FastAPI:
     # ---------------- devices ----------------
     @app.get("/devices", response_model=list[DeviceOut])
     def list_devices(q: str | None = None, limit: int = 100, offset: int = 0,
+                     sort: str | None = None, dir: str | None = "asc",
                      session=Depends(get_session),
                      operator: Operator = Depends(get_current_operator)):
         stmt = select(Device).where(Device.archived.is_(False))
@@ -214,7 +215,12 @@ def create_app(*, engine=None, kek=None, settings=None) -> FastAPI:
                 Device.serial.ilike(like),
                 Device.volume_id.ilike(like),
             ))
-        stmt = stmt.order_by(Device.hostname).limit(min(max(limit, 1), 500)).offset(max(offset, 0))
+        # sortable columns the Fleet table exposes; anything else falls back to hostname
+        _SORTABLE = {"hostname": Device.hostname, "serial": Device.serial,
+                     "site": Device.site, "volume_id": Device.volume_id}
+        col = _SORTABLE.get((sort or "").lower(), Device.hostname)
+        col = col.desc() if (dir or "").lower() == "desc" else col.asc()
+        stmt = stmt.order_by(col).limit(min(max(limit, 1), 500)).offset(max(offset, 0))
         return [_device_out(session, d) for d in session.execute(stmt).scalars().all()]
 
     @app.patch("/devices/{device_id}", response_model=DeviceOut)

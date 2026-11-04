@@ -81,19 +81,29 @@
 
   <!-- TABLE -->
   <div class="bg-surface-container-lowest rounded-xl border border-outline-variant/60 shadow-sm overflow-hidden flex flex-col">
-    <div class="overflow-x-auto">
-      <table class="w-full text-left border-collapse">
+    <!-- bulk selection toolbar -->
+    <div id="bulk-bar" class="blm-bulk hidden">
+      <span id="bulk-count" class="text-label-md font-semibold text-on-surface">0 selected</span>
+      <div class="flex items-center gap-2">
+        <button id="bulk-export" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest hover:bg-surface-container text-label-md font-medium text-on-surface transition-colors"><span class="material-symbols-outlined text-[16px]">download</span>Export selected</button>
+        <button id="bulk-archive" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest hover:bg-surface-container text-label-md font-medium text-on-surface transition-colors"><span class="material-symbols-outlined text-[16px]">inventory_2</span>Archive selected</button>
+      </div>
+      <button id="bulk-clear" class="ml-auto text-label-md font-medium text-primary hover:underline">Clear selection</button>
+    </div>
+    <div class="overflow-x-auto blm-scroll" style="max-height:calc(100vh - 240px)">
+      <table class="w-full text-left blm-table">
         <thead>
-          <tr class="bg-surface border-b border-outline-variant/50 text-label-sm text-outline uppercase tracking-wider">
-            <th class="py-3.5 px-4 pl-6">Hostname</th>
-            <th class="py-3.5 px-4">Serial</th>
-            <th class="py-3.5 px-4">Site</th>
-            <th class="py-3.5 px-4">Recovery Key ID</th>
+          <tr class="text-label-sm text-outline uppercase tracking-wider">
+            <th class="py-3.5 pl-6 pr-2 w-10"><input type="checkbox" id="sel-all" class="blm-checkbox" title="Select all on this page"></th>
+            <th class="py-3.5 px-4"><span class="blm-sort inline-flex items-center gap-1" data-sort="hostname">Hostname<span class="material-symbols-outlined blm-caret">unfold_more</span></span></th>
+            <th class="py-3.5 px-4"><span class="blm-sort inline-flex items-center gap-1" data-sort="serial">Serial<span class="material-symbols-outlined blm-caret">unfold_more</span></span></th>
+            <th class="py-3.5 px-4"><span class="blm-sort inline-flex items-center gap-1" data-sort="site">Site<span class="material-symbols-outlined blm-caret">unfold_more</span></span></th>
+            <th class="py-3.5 px-4"><span class="blm-sort inline-flex items-center gap-1" data-sort="volume_id">Recovery Key ID<span class="material-symbols-outlined blm-caret">unfold_more</span></span></th>
             <th class="py-3.5 px-4">Status</th>
             <th class="py-3.5 pr-6 pl-4 text-right">Actions</th>
           </tr>
         </thead>
-        <tbody id="rows" class="divide-y divide-outline-variant/30 text-body-md"></tbody>
+        <tbody id="rows" class="text-body-md"></tbody>
       </table>
     </div>
     <div class="px-6 py-3.5 bg-surface border-t border-outline-variant/40 flex items-center justify-between text-body-sm text-outline">
@@ -269,16 +279,26 @@ document.addEventListener("click", () => show("export-menu").classList.add("hidd
 show("menu-helper").onclick = () => downloadHelper(null);
 
 // ---- devices list ----
-let q = "", page = 0, DEV = [];
+let q = "", page = 0, DEV = [], sortCol = "hostname", sortDir = "asc";
+const SEL = new Set();   // selected device ids on the current page
 // fit the page to the viewport so the table doesn't push the page into a scroll
 // (row ~68px; ~480px of fixed chrome: header, sub-header, workbench, footer, banner)
 const SIZE = Math.max(4, Math.floor((window.innerHeight - 480) / 68));
 async function load(){
   const off = page * SIZE;
+  SEL.clear();   // selection is per-page; clear it whenever the page reloads
   let rows = [];
-  try { rows = await api(`/devices?q=${encodeURIComponent(q)}&limit=${SIZE}&offset=${off}`); }
-  catch(e){ show("rows").innerHTML = `<tr><td colspan="6" class="py-6 px-6 text-error">${esc(e.message)}</td></tr>`; return; }
+  try { rows = await api(`/devices?q=${encodeURIComponent(q)}&limit=${SIZE}&offset=${off}&sort=${sortCol}&dir=${sortDir}`); }
+  catch(e){ show("rows").innerHTML = `<tr><td colspan="7" class="py-6 px-6 text-error">${esc(e.message)}</td></tr>`; return; }
   draw(rows, off);
+}
+function paintSort(){
+  document.querySelectorAll(".blm-sort").forEach(s => {
+    const active = s.dataset.sort === sortCol;
+    s.classList.toggle("blm-active", active);
+    const caret = s.querySelector(".blm-caret");
+    if (caret) caret.textContent = active ? (sortDir === "asc" ? "arrow_upward" : "arrow_downward") : "unfold_more";
+  });
 }
 function draw(rows, off){
   DEV = rows;
@@ -291,7 +311,7 @@ function draw(rows, off){
   show("rows").innerHTML = rows.map(d => {
     const host = d.hostname && d.hostname.trim() ? esc(d.hostname) : `<span class="text-outline">—</span>`;
     const serial = d.serial ? `<span class="font-code-sm text-code-sm">${esc(d.serial)}</span>` : `<span class="text-outline">—</span>`;
-    const keyid = d.recovery_key_id ? `<span class="font-code-sm text-code-sm text-on-surface-variant">${esc(d.recovery_key_id)}</span>` : `<span class="text-outline">—</span>`;
+    const keyid = d.recovery_key_id ? `<span class="font-code-sm text-code-sm blm-muted">${esc(d.recovery_key_id)}</span>` : `<span class="text-outline">—</span>`;
     const site = d.site ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-label-sm bg-surface-container text-primary font-medium">${esc(d.site)}</span>` : `<span class="text-outline">—</span>`;
     const status = d.has_active_key
       ? `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-label-sm font-semibold bg-secondary-container/60 text-secondary border border-secondary-fixed"><span class="material-symbols-outlined text-[13px]">lock</span>key on file</span>`
@@ -299,17 +319,19 @@ function draw(rows, off){
     const idh = `data-id="${d.id}" data-host="${esc(d.hostname||'')}"`;
     const unlock = d.has_active_key ? `<button data-act="unlock" ${idh} class="row-act inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-primary text-on-primary text-label-md font-medium hover:bg-surface-tint"><span class="material-symbols-outlined text-[16px]">usb</span>Unlock</button>` : "";
     const reveal = (isSuper && d.has_active_key) ? `<button data-act="reveal" ${idh} class="row-act inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-error/40 text-error text-label-md font-medium hover:bg-error-container/40"><span class="material-symbols-outlined text-[16px]">key</span>Reveal</button>` : "";
-    const edit = isSuper ? `<button data-act="edit" ${idh} class="row-act p-1.5 rounded-md border border-outline-variant text-outline hover:text-on-surface hover:bg-surface-container" title="Edit"><span class="material-symbols-outlined text-[16px]">edit</span></button>` : "";
-    const archive = isSuper ? `<button data-act="archive" ${idh} class="row-act p-1.5 rounded-md border border-outline-variant text-outline hover:text-on-surface hover:bg-surface-container" title="Archive"><span class="material-symbols-outlined text-[16px]">inventory_2</span></button>` : "";
-    return `<tr class="hover:bg-surface transition-colors">
-      <td class="py-4 px-4 pl-6 font-semibold text-on-surface">${host}</td>
+    const edit = isSuper ? `<button data-act="edit" ${idh} class="row-act inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-outline-variant text-on-surface hover:bg-surface-container text-label-md font-medium"><span class="material-symbols-outlined text-[16px]">edit</span>Edit</button>` : "";
+    const archive = isSuper ? `<button data-act="archive" ${idh} class="row-act inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md border border-outline-variant text-on-surface hover:bg-surface-container text-label-md font-medium"><span class="material-symbols-outlined text-[16px]">inventory_2</span>Archive</button>` : "";
+    const sel = SEL.has(String(d.id));
+    return `<tr class="transition-colors${sel ? ' blm-row-sel' : ''}">
+      <td class="py-4 pl-6 pr-2"><input type="checkbox" class="blm-checkbox row-chk" data-id="${d.id}"${sel ? ' checked' : ''}></td>
+      <td class="py-4 px-4 font-semibold text-on-surface">${host}</td>
       <td class="py-4 px-4">${serial}</td>
       <td class="py-4 px-4 whitespace-nowrap">${site}</td>
       <td class="py-4 px-4 whitespace-nowrap">${keyid}</td>
       <td class="py-4 px-4 whitespace-nowrap">${status}</td>
       <td class="py-4 pr-6 pl-4 text-right whitespace-nowrap"><div class="inline-flex items-center gap-1.5">${unlock}${reveal}${edit}${archive}</div></td>
     </tr>`;
-  }).join("") || `<tr><td colspan="6" class="py-10 text-center text-outline">No devices match.</td></tr>`;
+  }).join("") || `<tr><td colspan="7" class="py-10 text-center text-outline">No devices match.</td></tr>`;
   show("rows").querySelectorAll(".row-act").forEach(b => b.onclick = () => {
     const act = b.dataset.act, id = b.dataset.id, host = b.dataset.host;
     if (act === "unlock") return openUnlock(id, host);
@@ -318,7 +340,70 @@ function draw(rows, off){
     if (act === "edit") return openDevice("edit", DEV.find(d => d.id === id));
     soon();
   });
+  show("rows").querySelectorAll(".row-chk").forEach(c => c.onchange = () => {
+    const id = c.dataset.id;
+    if (c.checked) SEL.add(id); else SEL.delete(id);
+    c.closest("tr").classList.toggle("blm-row-sel", c.checked);
+    syncBulk();
+  });
+  paintSort(); syncBulk();
 }
+// ---- sorting ----
+document.querySelectorAll(".blm-sort").forEach(s => s.onclick = () => {
+  const col = s.dataset.sort;
+  if (col === sortCol) sortDir = sortDir === "asc" ? "desc" : "asc";
+  else { sortCol = col; sortDir = "asc"; }
+  page = 0; load();
+});
+// ---- bulk selection ----
+function selectable(){ return [...show("rows").querySelectorAll(".row-chk")]; }
+function syncBulk(){
+  const n = SEL.size;
+  show("bulk-bar").classList.toggle("hidden", n === 0);
+  show("bulk-count").textContent = n + " selected";
+  const boxes = selectable();
+  const all = boxes.length > 0 && boxes.every(c => c.checked);
+  const some = boxes.some(c => c.checked);
+  const sa = show("sel-all"); sa.checked = all; sa.indeterminate = some && !all;
+}
+show("sel-all").onchange = e => {
+  selectable().forEach(c => {
+    c.checked = e.target.checked;
+    if (c.checked) SEL.add(c.dataset.id); else SEL.delete(c.dataset.id);
+    c.closest("tr").classList.toggle("blm-row-sel", c.checked);
+  });
+  syncBulk();
+};
+show("bulk-clear").onclick = () => {
+  SEL.clear();
+  selectable().forEach(c => { c.checked = false; c.closest("tr").classList.remove("blm-row-sel"); });
+  syncBulk();
+};
+show("bulk-export").onclick = () => {
+  const sel = DEV.filter(d => SEL.has(String(d.id)));
+  if (!sel.length) return;
+  const csvCell = v => { const s = (v==null?"":String(v)); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; };
+  const header = ["Hostname","Serial","Site","Recovery Key ID","Status"];
+  const lines = [header.join(",")].concat(sel.map(d => [
+    d.hostname||"", d.serial||"", d.site||"", d.recovery_key_id||"", d.has_active_key ? "key on file" : "no key"
+  ].map(csvCell).join(",")));
+  const blob = new Blob([lines.join("\r\n")], {type:"text/csv"});
+  const url = URL.createObjectURL(blob), a = document.createElement("a");
+  a.href = url; a.download = `inventory-selected-${sel.length}.csv`;
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  toast(`Exported ${sel.length} device(s).`);
+};
+show("bulk-archive").onclick = async () => {
+  const ids = [...SEL];
+  if (!ids.length) return;
+  if (!confirm(`Archive ${ids.length} selected device(s)? They're hidden from the list but records and history are kept.`)) return;
+  show("bulk-archive").disabled = true;
+  let ok = 0, fail = 0;
+  for (const id of ids){ try { await api(`/devices/${id}/archive`, {method:"POST"}); ok++; } catch(e){ fail++; } }
+  show("bulk-archive").disabled = false;
+  toast(`Archived ${ok}${fail ? `, ${fail} failed` : ""}.`);
+  load();
+};
 // ---- unlock (Pico) ----
 const HELPER = "http://127.0.0.1:8765";
 let ulCtx = null;

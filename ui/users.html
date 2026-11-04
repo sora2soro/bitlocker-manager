@@ -83,20 +83,30 @@
 
   <!-- TABLE -->
   <div class="bg-surface-container-lowest rounded-xl border border-outline-variant/60 shadow-sm overflow-hidden flex flex-col">
-    <div class="overflow-x-auto">
-      <table class="w-full text-left border-collapse">
+    <!-- bulk selection toolbar -->
+    <div id="bulk-bar" class="blm-bulk hidden">
+      <span id="bulk-count" class="text-label-md font-semibold text-on-surface">0 selected</span>
+      <div class="flex items-center gap-2">
+        <button id="bulk-activate" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest hover:bg-surface-container text-label-md font-medium text-on-surface transition-colors"><span class="material-symbols-outlined text-[16px] text-secondary">check_circle</span>Activate</button>
+        <button id="bulk-deactivate" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest hover:bg-surface-container text-label-md font-medium text-on-surface transition-colors"><span class="material-symbols-outlined text-[16px] text-outline">cancel</span>Deactivate</button>
+      </div>
+      <button id="bulk-clear" class="ml-auto text-label-md font-medium text-primary hover:underline">Clear selection</button>
+    </div>
+    <div class="overflow-x-auto blm-scroll" style="max-height:calc(100vh - 240px)">
+      <table class="w-full text-left blm-table">
         <thead>
-          <tr class="bg-surface border-b border-outline-variant/50 text-label-sm text-outline uppercase tracking-wider">
-            <th class="py-3.5 px-4">Name &amp; Identity</th>
-            <th class="py-3.5 px-4">Role</th>
-            <th class="py-3.5 px-4">Scope</th>
+          <tr class="text-label-sm text-outline uppercase tracking-wider">
+            <th class="py-3.5 pl-6 pr-2 w-10"><input type="checkbox" id="sel-all" class="blm-checkbox" title="Select all shown"></th>
+            <th class="py-3.5 px-4"><span class="blm-sort inline-flex items-center gap-1" data-sort="name">Name &amp; Identity<span class="material-symbols-outlined blm-caret">unfold_more</span></span></th>
+            <th class="py-3.5 px-4"><span class="blm-sort inline-flex items-center gap-1" data-sort="role">Role<span class="material-symbols-outlined blm-caret">unfold_more</span></span></th>
+            <th class="py-3.5 px-4"><span class="blm-sort inline-flex items-center gap-1" data-sort="scope">Scope<span class="material-symbols-outlined blm-caret">unfold_more</span></span></th>
             <th class="py-3.5 px-4">Key Escrow Delegation</th>
-            <th class="py-3.5 px-4">Status</th>
+            <th class="py-3.5 px-4"><span class="blm-sort inline-flex items-center gap-1" data-sort="status">Status<span class="material-symbols-outlined blm-caret">unfold_more</span></span></th>
             <th class="py-3.5 px-4">Authentication / MFA</th>
             <th class="py-3.5 pr-6 pl-4 text-right">Actions</th>
           </tr>
         </thead>
-        <tbody id="rows" class="divide-y divide-outline-variant/30 text-body-md"></tbody>
+        <tbody id="rows" class="text-body-md"></tbody>
       </table>
     </div>
     <div class="px-6 py-3.5 bg-surface border-t border-outline-variant/40 flex items-center justify-between text-body-sm text-outline">
@@ -235,8 +245,20 @@ const ESCROW = {
 function displayName(u){ return (u.display_name && u.display_name.trim()) ? u.display_name : u.username; }
 
 let ALL = [], roleFilter = "all", statusMode = "active", q = "";
+let sortCol = null, sortDir = "asc";
+const SEL = new Set();   // selected operator ids among the shown rows
+const SORT_KEY = { name: displayName, role: u=>u.role, scope: u=>u.scope||"", status: u=>u.status };
 
-async function load(){ ALL = await api("/operators"); draw(); }
+async function load(){ ALL = await api("/operators"); SEL.clear(); draw(); }
+
+function paintSort(){
+  document.querySelectorAll(".blm-sort").forEach(s => {
+    const active = s.dataset.sort === sortCol;
+    s.classList.toggle("blm-active", active);
+    const caret = s.querySelector(".blm-caret");
+    if (caret) caret.textContent = active ? (sortDir === "asc" ? "arrow_upward" : "arrow_downward") : "unfold_more";
+  });
+}
 
 function draw(){
   const bySearch = u => {
@@ -247,6 +269,10 @@ function draw(){
   const byStatus = u => statusMode === "all" ? true : u.status === statusMode;
   const byRole = u => roleFilter === "all" ? true : u.role === roleFilter;
   const rows = ALL.filter(byStatus).filter(byRole).filter(bySearch);
+  if (sortCol && SORT_KEY[sortCol]){
+    const key = SORT_KEY[sortCol], f = sortDir === "asc" ? 1 : -1;
+    rows.sort((a,b) => String(key(a)).toLowerCase().localeCompare(String(key(b)).toLowerCase(), undefined, {numeric:true}) * f);
+  }
 
   // pills (roles present, from the status-filtered set)
   const base = ALL.filter(byStatus);
@@ -278,19 +304,21 @@ function draw(){
     const resetItem = isSuper
       ? `<button data-act="reset" data-id="${u.id}" data-label="${esc(nm)}" class="row-act w-full text-left flex items-center gap-2 px-3 py-2 text-body-md text-on-surface hover:bg-surface-container"><span class="material-symbols-outlined text-[18px] text-outline">key</span>Reset password</button>`
       : "";
-    return `<tr class="hover:bg-surface transition-colors">
+    const sel = SEL.has(String(u.id));
+    return `<tr class="transition-colors${sel ? ' blm-row-sel' : ''}">
+      <td class="py-4 pl-6 pr-2"><input type="checkbox" class="blm-checkbox row-chk" data-id="${u.id}"${sel ? ' checked' : ''}></td>
       <td class="py-4 px-4">
         <div class="flex items-center gap-3">
           <div class="w-9 h-9 rounded-full bg-surface-container-high text-primary flex items-center justify-center font-semibold text-body-sm ring-1 ring-outline-variant/40">${esc(userInitials(u))}</div>
           <div><div class="font-semibold text-on-surface">${esc(nm)}</div>
-          <div class="text-body-sm text-outline font-code-sm">@${esc(u.username)}</div></div>
+          <div class="text-body-sm blm-muted font-code-sm">@${esc(u.username)}</div></div>
         </div>
       </td>
       <td class="py-4 px-4 whitespace-nowrap"><span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-label-sm font-semibold bg-surface-container text-on-surface"><span class="material-symbols-outlined text-[14px] text-primary">${ROLE_ICON[u.role]||"person"}</span>${esc(u.role)}</span></td>
       <td class="py-4 px-4 whitespace-nowrap">${scopeCell}</td>
       <td class="py-4 px-4"><span class="inline-flex items-center gap-1.5 text-body-sm font-medium text-on-surface"><span class="material-symbols-outlined text-[16px] text-tertiary">${esc_.i}</span>${esc_.t}</span></td>
       <td class="py-4 px-4 whitespace-nowrap">${statusPill}</td>
-      <td class="py-4 px-4 whitespace-nowrap"><div class="flex items-center gap-1.5 text-body-sm text-outline"><span class="material-symbols-outlined text-[16px] text-secondary">fingerprint</span><span>Authenticator (TOTP)</span></div></td>
+      <td class="py-4 px-4 whitespace-nowrap"><div class="flex items-center gap-1.5 text-body-sm blm-muted"><span class="material-symbols-outlined text-[16px] text-secondary">fingerprint</span><span>Authenticator (TOTP)</span></div></td>
       <td class="py-4 pr-6 pl-4 text-right whitespace-nowrap">
         <div class="relative inline-block text-left">
           <button class="act-btn inline-flex items-center gap-1 px-3 py-1.5 rounded-md border border-outline-variant bg-surface-container-lowest hover:bg-surface-container text-on-surface text-label-md font-medium"><span>Actions</span><span class="material-symbols-outlined text-[16px] text-outline">arrow_drop_down</span></button>
@@ -301,7 +329,7 @@ function draw(){
           </div>
         </div>
       </td></tr>`;
-  }).join("") || `<tr><td colspan="7" class="py-10 text-center text-outline">No users match.</td></tr>`;
+  }).join("") || `<tr><td colspan="8" class="py-10 text-center text-outline">No users match.</td></tr>`;
 
   // wire per-row controls
   show("rows").querySelectorAll(".act-btn").forEach(b => b.onclick = e => {
@@ -309,7 +337,57 @@ function draw(){
     closeMenus(); if (!open) m.classList.remove("hidden");
   });
   show("rows").querySelectorAll(".row-act").forEach(b => b.onclick = () => rowAction(b.dataset));
+  show("rows").querySelectorAll(".row-chk").forEach(c => c.onchange = () => {
+    if (c.checked) SEL.add(c.dataset.id); else SEL.delete(c.dataset.id);
+    c.closest("tr").classList.toggle("blm-row-sel", c.checked);
+    syncBulk();
+  });
+  paintSort(); syncBulk();
 }
+// ---- sorting ----
+document.querySelectorAll(".blm-sort").forEach(s => s.onclick = () => {
+  const col = s.dataset.sort;
+  if (col === sortCol) sortDir = sortDir === "asc" ? "desc" : "asc";
+  else { sortCol = col; sortDir = "asc"; }
+  draw();
+});
+// ---- bulk selection ----
+function selectable(){ return [...show("rows").querySelectorAll(".row-chk")]; }
+function syncBulk(){
+  const n = SEL.size;
+  show("bulk-bar").classList.toggle("hidden", n === 0);
+  show("bulk-count").textContent = n + " selected";
+  const boxes = selectable();
+  const all = boxes.length > 0 && boxes.every(c => c.checked);
+  const some = boxes.some(c => c.checked);
+  const sa = show("sel-all"); sa.checked = all; sa.indeterminate = some && !all;
+}
+show("sel-all").onchange = e => {
+  selectable().forEach(c => {
+    c.checked = e.target.checked;
+    if (c.checked) SEL.add(c.dataset.id); else SEL.delete(c.dataset.id);
+    c.closest("tr").classList.toggle("blm-row-sel", c.checked);
+  });
+  syncBulk();
+};
+show("bulk-clear").onclick = () => {
+  SEL.clear();
+  selectable().forEach(c => { c.checked = false; c.closest("tr").classList.remove("blm-row-sel"); });
+  syncBulk();
+};
+async function bulkStatus(act){
+  const ids = [...SEL];
+  if (!ids.length) return;
+  if (!confirm(`${act === "activate" ? "Activate" : "Deactivate"} ${ids.length} selected user(s)?`)) return;
+  show("bulk-activate").disabled = show("bulk-deactivate").disabled = true;
+  let ok = 0, fail = 0;
+  for (const id of ids){ try { await api("/operators/"+id+"/"+act, {method:"POST"}); ok++; } catch(e){ fail++; } }
+  show("bulk-activate").disabled = show("bulk-deactivate").disabled = false;
+  await load();
+  alert(`${act === "activate" ? "Activated" : "Deactivated"} ${ok}${fail ? `, ${fail} failed` : ""}.`);
+}
+show("bulk-activate").onclick = () => bulkStatus("activate");
+show("bulk-deactivate").onclick = () => bulkStatus("deactivate");
 function closeMenus(){ document.querySelectorAll(".act-menu").forEach(m => m.classList.add("hidden")); }
 
 async function rowAction(d){
